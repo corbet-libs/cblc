@@ -301,7 +301,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cssr?rev=7ac7c9ebaff919f45f51837ca7a081207696c5a3#7ac7c9ebaff919f45f51837ca7a081207696c5a3"
+source = "git+https://github.com/corbet-foss/cssr?rev=b1e062fc1c0f581257668389988fcb17550711fa#b1e062fc1c0f581257668389988fcb17550711fa"
 dependencies = [
  "crlt",
  "tokio",

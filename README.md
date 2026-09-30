@@ -39,8 +39,9 @@ JavaScript contract tests. The legacy circuits and browser experiments remain
 validation tooling, excluded from the server API. Real proof acceptance and
 storage tests have distinct evidence; historical reports are not new CI results.
 Punishment inbox enforcement, change-spend binding and relative-record checks are
-available behind a separately configured complete extension verifier. The new
-circuit/holder implementation is not shipped; see [extension requirements](docs/EXTENSIONS.md).
+available only in the explicitly selected `extension-issuer-harness` feature.
+Default builds reject extension activation, even with a supplied verifier. The
+complete extension circuit/holder implementation is not shipped; see [extension requirements](docs/EXTENSIONS.md).
 See [CONTRACT](docs/CONTRACT.md) and [migration](docs/MIGRATION.md).
 
 Copyright 2026 Julian Y. Richard Corbet. [FSL-1.1-ALv2](LICENSE.md).
@@ -56,3 +57,9 @@ verification. `cpns` main exposes `ChangeTokenVerifier` and atomic pin revision
 checks; use the pinned API for exact owner/member and change binding. The process
 extension adapter allocates separate authenticated and anonymous cvfy pools.
 No alternate throttling algorithm or cryptographic primitive is implemented here.
+
+
+The Rust and storage checks are separate from dependency-audit status. The new
+cargo-deny gate currently fails on libsql's transitive HTTP/TLS advisories; see
+[security status](docs/SECURITY-STATUS.md). No advisory is ignored to obtain a
+passing audit. The optional Turso test remains skipped without both credentials.

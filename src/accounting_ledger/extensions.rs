@@ -14,6 +14,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         verifier: impl ExtensionVerifier + 'static,
         limits: crate::verification::ExtensionLimits,
     ) -> Result<Self, Error> {
+        if !cfg!(feature = "extension-issuer-harness") {
+            return Err(Error::UnsupportedCapability);
+        }
         policy.validate()?;
         let budget = crate::verification::Budget::new(&self.trust.community_id, limits)?;
         let scope = verifier.scope();

@@ -1,3 +1,8 @@
+> **Not production ready:** default builds reject `with_extensions`. The
+> `extension-issuer-harness` feature enables storage/authorization experiments
+> only. The complete seven-constraint Noir relation and cwlt witness are absent.
+> Passing the signed-boundary tests does not establish hidden extension semantics.
+
 # Extension proof contract and activation boundary
 
 The ordinary reciprocity v2 circuit does **not** prove punishment, change tokens,
