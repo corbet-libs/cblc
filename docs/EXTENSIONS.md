@@ -85,7 +85,10 @@ The inherited account-state domain uses Poseidon2 tags 30 (extended state), 31
 (extension policy), 32 (delivery) and 33 (authorization). Delivery commits
 community, recipient, reporter, nonce, group and hidden kind. Authorization
 commits the reporter-secret contact marker, delivery and kind. Nullifier domains
-40/41 separate authorization reuse and deposit replay; stage zero covers the
+40/41 separate authorization reuse and deposit replay. Both hashes additionally
+include the hidden owner secret itself: the legacy named receipt marker exposes
+the contact event, so hashing that event alone would create an issuer link.
+Stage zero covers the
 initial outcome, stage one established punishment. No shared secret contact
 marker appears in both named account updates.
 

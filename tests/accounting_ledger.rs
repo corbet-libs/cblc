@@ -837,8 +837,9 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
 
 #[test]
 fn extension_activation_requires_a_real_proof() {
-    let mut f = Fixture::new();
-    f.policy.max_proof_bytes = cblc::extensions::EXTENSION_PROOF_BYTES;
+    let f = Fixture::new();
+    let mut settings = policy();
+    settings.max_proof_bytes = cblc::extensions::EXTENSION_PROOF_BYTES;
     let activation = cblc::extensions::ExtensionActivation {
         account: genesis(&f).statement,
         proof: vec![],
@@ -846,7 +847,7 @@ fn extension_activation_requires_a_real_proof() {
     let ledger = AccountLedger::with_store(
         cblc::storage::MemoryStore::default(),
         f.trust,
-        policy(),
+        settings,
         StorageOnlyVerifier::default(),
         SigningKey::from_bytes(&[9; 32]),
     )

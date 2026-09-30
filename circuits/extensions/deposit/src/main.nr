@@ -1,5 +1,5 @@
 use core::{Opening, Obligation, ExtensionPolicy, extension_hash, state_hash, secret_hash,
-    authorization, delivery, certificate_digest, verify_p256, field, hash, marker};
+    authorization, delivery, certificate_digest, verify_p256, field, hash, marker, limbs};
 
 fn main(
     extension: pub ExtensionPolicy, issuer_key: pub [u8;64], scope: pub [u8;32],
@@ -21,6 +21,9 @@ fn main(
     assert(field(obligation)==delivery(community,recipient,reporter,slot,kind));
     let event=marker(community,reporter,secret,recipient,slot.nonce);
     let stage=if kind==4 {1} else {0};
-    assert(field(authorization_nullifier)==hash([event,40,stage]));
-    assert(field(nullifier)==hash([event,41,stage]));
+    // Legacy receipt settlement publishes event as a named replay marker. Keep
+    // a fresh secret input here so even that issuer cannot derive either token.
+    let hidden=limbs(secret);
+    assert(field(authorization_nullifier)==hash([event,40,stage,hidden[0],hidden[1]]));
+    assert(field(nullifier)==hash([event,41,stage,hidden[0],hidden[1]]));
 }

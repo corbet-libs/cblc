@@ -180,6 +180,9 @@ try{
   const answerCandidate=await members[2].deposit({slot:replySlot,kind:1},members[2].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10);
   const forged=structuredClone(answerCandidate.input);forged.certificate=Array(64).fill(0);
   await assert.rejects(new Noir(programs.deposit).execute(witnessInputs(programs.deposit,forged)));
+  const linked=structuredClone(answerCandidate.input);
+  linked.authorization_nullifier=(await import('@corbet-labs/czkp/primitives')).fieldBytes(await hashes.raw([acceptedContact.incoming,40,0]));
+  await assert.rejects(new Noir(programs.deposit).execute(witnessInputs(programs.deposit,linked)));
   const answer=await anonymous(answerCandidate,'answer-deposit');
   await call({op:'deposit',batch:[{deposit:answer.statement.deposit,proof:answer.proof},batch[1]],now});
   await drain(0);
