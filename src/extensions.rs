@@ -45,6 +45,13 @@ pub struct PendingObligation {
     pub previous: Inbox,
     pub commitment: [u8; 32],
 }
+/// Private input to a delayed deposit proof, returned only to the accepting holder.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StateCertificate {
+    pub accepted_at: u64,
+    pub signature: Vec<u8>,
+}
 /// The public effect to prove in addition to all ordinary account constraints.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]

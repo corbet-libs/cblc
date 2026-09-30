@@ -17,10 +17,12 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           cache-on-failure: true
       - run: rustc --version && cargo fmt --check
+      - run: cargo generate-lockfile
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -28,6 +30,12 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm test
       - run: node runtime/extensions/compile.mjs
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
+        with:
+          tool: wasm-pack
+      - run: wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
+      - run: cargo build --locked --example extension_issuer --features extension-issuer-harness
+      - run: node tests/extensions-proof.mjs
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         id: proof-cache
         with:
@@ -44,6 +52,8 @@ jobs:
           path: |
             Cargo.lock
             package-lock.json
+            .extension-test/results.json
+            .extension-test/manifest.json
 
   audit:
     runs-on: ubuntu-latest
@@ -53,4 +63,9 @@ jobs:
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
         with:
           tool: cargo-deny
-      - run: cargo deny check advisories licenses
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: cargo metadata --locked --format-version 1 > dependency-metadata.json
+      - run: node .github/check-advisory-exposure.mjs
+      - run: cargo deny --locked check advisories licenses

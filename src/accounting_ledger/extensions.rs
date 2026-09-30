@@ -6,6 +6,37 @@ use crate::extensions::{
 };
 
 impl<V: AccountProofVerifier> AccountLedger<V> {
+    /// Certify a genuinely issued extension acceptance for an anonymous deposit.
+    /// The independent P-256 issuer key must match the pinned verifier manifest.
+    /// Only an acceptance returned after the atomic commit can pass this check.
+    pub fn certify_extended(
+        &self,
+        accepted: &AccountAcceptance,
+        issuer: &cssr::certificate::CertificateIssuer,
+    ) -> Result<crate::extensions::StateCertificate, Error> {
+        let extensions = self
+            .extensions
+            .as_ref()
+            .ok_or(Error::UnsupportedCapability)?;
+        verify_account_acceptance(accepted, &self.operator.verifying_key().to_bytes())?;
+        if accepted.statement.community != self.community
+            || accepted.proof_scope != extensions.verifier.scope()
+        {
+            return Err(Error::PolicyMismatch);
+        }
+        let signature = issuer.issue(&cssr::certificate::AcceptedState {
+            community: self.community,
+            owner: accepted.statement.owner,
+            state: accepted.statement.next_state,
+            scope: accepted.proof_scope.circuit_digest,
+            version: accepted.statement.next_version,
+            accepted_at: accepted.accepted_at,
+        });
+        Ok(crate::extensions::StateCertificate {
+            accepted_at: accepted.accepted_at,
+            signature: signature.to_vec(),
+        })
+    }
     /// Pin a separate complete extension relation. Legacy handles then fail closed.
     /// Only host configuration may call this; never accept a verifier from a request.
     pub fn with_extensions(

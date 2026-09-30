@@ -1,7 +1,8 @@
 # Security status
 
-The extension feature is **not ready for production**. The complete extension
-circuit and cwlt-side witness have not been implemented. Default builds reject
+The extension feature is **not ready for production**. The three extension
+circuit drafts now compile, and the cwlt witness planner passes native/wasm tests.
+The complete real-proof integration suite has not yet passed. Default builds reject
 activation before any database configuration is written. The explicitly named
 `extension-issuer-harness` feature exists for integration tests at a trusted,
 synthetic verifier boundary. It must not be enabled in a deployed service.
@@ -56,21 +57,11 @@ lifetime sequence, but direct transport submissions still leak timing and origin
 a mixing relay and ordinary settlement traffic remain necessary. Removing pending
 rows does not erase database backups or an operator's independent recordings.
 
-## Dependency audit blocker
+## Dependency audit exceptions
 
-The new cargo-deny audit is intentionally failing for the pinned libsql 0.9.30
-transport graph through crlt. No ignore entries or continue-on-error bypasses are
-configured. The affected dependencies require incompatible-version upgrades
-outside this repository's small storage adapter:
-
-- `h2 0.3.27`: [RUSTSEC-2026-0258](https://rustsec.org/advisories/RUSTSEC-2026-0258).
-- `rustls-webpki 0.102.8`: [RUSTSEC-2026-0049](https://rustsec.org/advisories/RUSTSEC-2026-0049),
-  [RUSTSEC-2026-0098](https://rustsec.org/advisories/RUSTSEC-2026-0098),
-  [RUSTSEC-2026-0099](https://rustsec.org/advisories/RUSTSEC-2026-0099),
-  [RUSTSEC-2026-0104](https://rustsec.org/advisories/RUSTSEC-2026-0104).
-- The graph also reports the unmaintained `rustls-pemfile` dependency
-  ([RUSTSEC-2025-0134](https://rustsec.org/advisories/RUSTSEC-2025-0134)).
-
-The dependency audit and full extension proof implementation are release blockers,
-regardless of functional test results. Optional real Turso tests require both
-`TURSO_URL` and `TURSO_TOKEN`; CI uses no real Turso credentials.
+The six inherited libSQL transport advisories are documented in
+[DEPENDENCIES.md](DEPENDENCIES.md). CI verifies their exact locked versions and
+upstream connector source. HTTP/2 is unused and CRLs are not configured by that
+connector; two remote TLS name-constraint risks and the unmaintained parser remain
+open. A green exception-policy audit is not an advisory-free dependency graph.
+No deployment or registry publication is authorized by these checks.

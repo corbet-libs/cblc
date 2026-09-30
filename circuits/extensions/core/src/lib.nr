@@ -25,7 +25,7 @@ pub struct Opening {
 
 pub struct Obligation {
     pub role: u8, pub peer: [u8; 32], pub nonce: [u8; 32], pub group: [u8; 32],
-    pub contact_policy: [u8; 32], pub amount: u32, pub phase: u8, pub outcome: u8,
+    pub contact_policy: [u8; 32], pub amount: u32, pub phase: u8, pub outcome: u8, pub answered: bool, pub self_punished: bool,
     pub admitted_at: u64, pub expires_at: u64, pub peer_authority: Field, pub owner_authority: Field,
 }
 
@@ -241,7 +241,7 @@ pub fn obligation_hash(event: Field, slot: Obligation, phase: u8) -> Field {
     let p = limbs(slot.peer); let n = limbs(slot.nonce); let g = limbs(slot.group);
     let c = limbs(slot.contact_policy);
     hash([DOMAIN, 4, event, slot.role as Field, p[0], p[1], n[0], n[1], g[0], g[1],
-        c[0], c[1], slot.amount as Field, phase as Field, slot.outcome as Field, slot.admitted_at as Field, slot.expires_at as Field, slot.peer_authority, slot.owner_authority])
+        c[0], c[1], slot.amount as Field, phase as Field, slot.outcome as Field, slot.answered as Field, slot.self_punished as Field, slot.admitted_at as Field, slot.expires_at as Field, slot.peer_authority, slot.owner_authority])
 }
 
 pub fn receipt_bytes(community: [u8; 32], responder: [u8; 32], other: [u8; 32],

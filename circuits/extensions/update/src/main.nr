@@ -113,7 +113,7 @@ fn main(
         assert((old.debt <= SAFE) & (old.accepted <= SAFE) & (old.declined <= SAFE) & (old.punished <= SAFE));
         if action == 1 {
             // Both owners commit the original initiator's common opened-at.
-            assert((slot.phase == 1) & (slot.outcome==0) & (now < slot.expires_at));
+            assert((slot.phase == 1) & (slot.outcome==0) & !slot.answered & !slot.self_punished & (now < slot.expires_at));
             assert(old.debt==0);
             assert(valid_until <= slot.expires_at);
             if slot.role == 0 {
@@ -180,16 +180,19 @@ fn main(
             if self_punish {
                 verify_contact(community,owner,slot,peer_enrollment,contact_signature);
                 if action==7 {assert((slot.role==1) & ((slot.phase==1)|(slot.phase==2)) & (slot.outcome==0));}
-                else {assert((slot.phase==3) & (slot.outcome==1));}
-                pair_root=indexed::update(pair_root,pair_count,pair,1,2,pair_map.leaf,pair_map.index,pair_map.path);
+                else {assert(slot.answered & !slot.self_punished);}
+                assert((pair_map.leaf[1]==1)|(pair_map.leaf[1]==2));
+                pair_root=indexed::update(pair_root,pair_count,pair,pair_map.leaf[1],2,pair_map.leaf,pair_map.index,pair_map.path);
                 authorized=authorization(community,owner,owner_secret,slot,kind);
+                next_slot.self_punished=true;
             } else {
                 let obligation: [u8;32]=delivery(community,owner,slot.peer,slot,kind).to_be_bytes();
                 assert(inbox==advance(community,owner,previous_inbox,obligation));
                 assert(settlement_marker==[0;32]);
                 assert((kind==4)|(slot.role==0));
-                if kind!=4 {assert((slot.outcome==0)|(slot.outcome==kind));}
-                else {assert((slot.outcome==1)&(slot.phase==3));}
+                if kind==3 {assert(slot.outcome==0);}
+                else if kind!=4 {assert((slot.outcome==0)|(slot.outcome==kind));}
+                else {assert(slot.answered & (slot.outcome==1));}
                 if ((kind==1)|(kind==2)) & (slot.outcome==0) {
                     if kind==1 {accepted=accepted+1;} else {declined=declined+1;}
                 } else if (kind==3)|(kind==4) {
@@ -214,7 +217,7 @@ fn main(
                         available=available+slot.amount;
                         reserved=reserved-slot.amount as u128;
                     } else {assert((slot.phase==4)|(slot.phase==5));}
-                    next_slot.phase=3;
+                    next_slot.phase=3; next_slot.answered=true;
                 }
                 next_slot.outcome=kind;
             }
@@ -227,7 +230,7 @@ fn main(
             let next_phase = if action == 2 { 2 } else if action == 4 { 4 } else if action == 5 { 5 } else { 3 };
             assert(slot.phase == if (action == 2) | (action == 4) { 1 } else { 2 });
             let mut changed_slot=slot;
-            if action==3 {changed_slot.outcome=resolution.kind;}
+            if action==3 {changed_slot.outcome=resolution.kind; if resolution.kind==1 {changed_slot.answered=true;}}
             changed_root = indexed::update(own_root, own_count, event,
                 obligation_hash(event, slot, slot.phase), obligation_hash(event, changed_slot, next_phase),
                 own_map.leaf, own_map.index, own_map.path);
