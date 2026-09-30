@@ -136,3 +136,41 @@ pub(crate) fn advance(previous: &Inbox, deposit: &Deposit) -> Result<Inbox, Erro
         root: hash.finalize().into(),
     })
 }
+
+/// Canonical acceptance binding for extended requests, including the effect and
+/// pinned extension policy/scope. This is also the exact-retry identity.
+pub fn extended_request_digest(
+    request: &crate::accounting::AccountRequest,
+    update: &ExtendedUpdate,
+    policy: &ExtensionPolicy,
+) -> Result<[u8; 32], Error> {
+    policy.validate()?;
+    let config =
+        serde_json::to_vec(&(policy, &request.proof_scope)).map_err(|_| Error::InvalidInput)?;
+    let binding = serde_json::to_vec(&(
+        b"cblc.extended-request.v1",
+        crate::accounting::account_request_digest(request)?,
+        config,
+        update,
+    ))
+    .map_err(|_| Error::InvalidInput)?;
+    Ok(Sha256::digest(binding).into())
+}
+/// Verify a returned acceptance for the exact effect before consuming permission
+/// in another server component. That component must still make its own use atomic.
+pub fn verify_extended_acceptance(
+    acceptance: &crate::accounting::AccountAcceptance,
+    request: &crate::accounting::AccountRequest,
+    update: &ExtendedUpdate,
+    policy: &ExtensionPolicy,
+    operator_key: &[u8; 32],
+) -> Result<(), Error> {
+    if acceptance.statement != request.statement
+        || acceptance.request_id != request.request_id
+        || acceptance.proof_scope != request.proof_scope
+        || acceptance.request_digest != extended_request_digest(request, update, policy)?
+    {
+        return Err(Error::Replay);
+    }
+    crate::accounting::verify_account_acceptance(acceptance, operator_key)
+}

@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm test
       - uses: actions/cache@v4
         id: proof-cache

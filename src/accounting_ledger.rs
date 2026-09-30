@@ -325,17 +325,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             &account_request_bytes(request)?,
             &request.signature,
         )?;
-        let mut request_digest = account_request_digest(request)?;
-        if let Some((extension, update)) = extension {
-            let binding = serde_json::to_vec(&(
-                b"cblc.extended-request.v1",
-                request_digest,
-                &extension.config,
-                update,
-            ))
-            .map_err(|_| Error::InvalidInput)?;
-            request_digest = Sha256::digest(binding).into();
-        }
+        let request_digest = match extension {
+            Some((extension, update)) => {
+                crate::extensions::extended_request_digest(request, update, &extension.policy)?
+            }
+            None => account_request_digest(request)?,
+        };
         let root_key = decode::<32>(&authorization.root_public_key)?;
         let operator_key = self.operator.verifying_key().to_bytes();
         let mut transaction = self.connection.transaction()?;

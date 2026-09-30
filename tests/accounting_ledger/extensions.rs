@@ -290,10 +290,16 @@ fn change_token_is_a_bound_single_successor_spend() {
             .unwrap(),
         accepted
     );
+    let operator = SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes();
+    verify_extended_acceptance(&accepted, &next, &change, &settings(), &operator).unwrap();
     let changed = ExtendedUpdate {
         effect: Effect::Change { binding: [91; 32] },
         ..change
     };
+    assert_eq!(
+        verify_extended_acceptance(&accepted, &next, &changed, &settings(), &operator),
+        Err(Error::Replay)
+    );
     assert_eq!(
         ledger.apply_extended(
             &f.grant(7, &f.device),
@@ -303,5 +309,69 @@ fn change_token_is_a_bound_single_successor_spend() {
             || 130
         ),
         Err(Error::Replay)
+    );
+}
+
+struct PausedExtension {
+    entered: Sender<()>,
+    release: Receiver<()>,
+}
+impl ExtensionVerifier for PausedExtension {
+    fn scope(&self) -> AccountProofScope {
+        backend().scope()
+    }
+    fn verify(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error> {
+        backend().verify(statement, proof)?;
+        self.entered.send(()).map_err(|_| Error::CryptoProvider)?;
+        self.release
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| Error::CryptoProvider)
+    }
+}
+#[test]
+fn a_deposit_racing_verification_cannot_be_skipped_at_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("db");
+    let f = Fixture::new();
+    let mut fast = open(&path, &f, StorageOnlyVerifier::default())
+        .with_extensions(settings(), backend())
+        .unwrap();
+    fast.admit_checkpoint(0, fr(8)).unwrap();
+    let update = ExtendedUpdate {
+        inbox: Inbox::default(),
+        effect: Effect::Update,
+    };
+    let first = signed_update(genesis(&f), &update, &f);
+    fast.apply_extended(
+        &f.grant(7, &f.device),
+        &f.authorize(7, &f.device),
+        &first,
+        &update,
+        || 120,
+    )
+    .unwrap();
+    let next = signed_update(successor(&first, &f, 11), &update, &f);
+    let (entered, observed) = mpsc::channel();
+    let (resume, release) = mpsc::channel();
+    let mut slow = open(&path, &f, StorageOnlyVerifier::default())
+        .with_extensions(settings(), PausedExtension { entered, release })
+        .unwrap();
+    let g = f.grant(7, &f.device);
+    let a = f.authorize(7, &f.device);
+    std::thread::scope(|scope| {
+        let worker = scope.spawn(|| slow.apply_extended(&g, &a, &next, &update, || 130));
+        observed.recv_timeout(Duration::from_secs(10)).unwrap();
+        let token = deposit_for(&first, 60);
+        let deposited = fast.deposit(&token, &deposit_proof(&token));
+        resume.send(()).unwrap();
+        assert_eq!(deposited.unwrap().sequence, 1);
+        assert_eq!(worker.join().unwrap(), Err(Error::Replay));
+    });
+    assert_eq!(
+        inspect(&path)
+            .query_row("SELECT version FROM frontiers", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        0
     );
 }

@@ -75,3 +75,7 @@ Tests use real libSQL/memory transactions and real signatures at an explicitly
 synthetic external-verifier boundary. They establish issuer atomicity, binding,
 isolation and non-suppression checks, **not** these hidden circuit constraints.
 Do not interpret their success as a production-ready punishment proof system.
+
+`extended_request_digest` specifies the canonical retry/effect binding.
+`verify_extended_acceptance` verifies the returned signature against the exact
+request, effect and extension policy before another server component consumes it.
