@@ -68,3 +68,19 @@ previously consumed root is bound in every extended update. Pending rows are
 removed atomically on consumption, using exact primary-key deletes. Exact retry
 lookup precedes inbox changes, so a newly arrived obligation does not break
 recovery of the last accepted response.
+
+`with_extensions` requires explicit `ExtensionLimits`. Cheap syntax, recipient,
+current-state and replay checks run before anonymous proof verification; cthl
+then admits global and per-subject work. Limits are ephemeral and reset with the
+handle, so composition must reuse its handle and enforce transport-level limits.
+`ProcessExtensionVerifier` uses independent cvfy process pools for authenticated
+updates and anonymous deposits/record checks. The generic verifier trait remains
+a trusted host boundary; custom implementations must honor the same separation.
+
+`pins::change_binding` length-prefixes community, canonical cpsd member hex and
+field, followed by the old revision and both 32-byte fingerprints, under a
+versioned SHA-256 domain. `PinSpendVerifier` verifies a completed cblc acceptance,
+pinned scope/policy, exact binding, community and `SHA-256(pseudonym)` account
+owner. cpns then atomically checks and replaces the old pin revision. Failed pin
+CAS cannot undo the already completed spend; exact retries cannot change another
+field/member/revision. Raw values and salts never enter this API.

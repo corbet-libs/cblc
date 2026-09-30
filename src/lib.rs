@@ -8,3 +8,6 @@ pub mod admission;
 pub mod storage;
 pub use czkp::Error;
 pub mod extensions;
+
+pub mod pins;
+pub mod verification;

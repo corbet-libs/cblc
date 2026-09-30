@@ -12,8 +12,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         mut self,
         policy: ExtensionPolicy,
         verifier: impl ExtensionVerifier + 'static,
+        limits: crate::verification::ExtensionLimits,
     ) -> Result<Self, Error> {
         policy.validate()?;
+        let budget = crate::verification::Budget::new(&self.trust.community_id, limits)?;
         let scope = verifier.scope();
         if scope == self.proof_scope
             || scope.circuit_digest == [0; 32]
@@ -32,6 +34,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.commit()?;
         self.extensions = Some(Extensions {
             policy,
+            budget,
             verifier: Box::new(verifier),
             config,
         });
@@ -96,7 +99,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.rollback()?;
         for ((deposit, proof), fresh) in batch.iter().zip(&fresh) {
             if *fresh {
-                extensions.verifier.verify(
+                extensions.budget.check(&deposit.recipient)?;
+                extensions.verifier.verify_anonymous(
                     &ExtensionStatement::Deposit {
                         policy: extensions.policy.clone(),
                         deposit: deposit.clone(),
@@ -200,7 +204,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         let mut tx = self.connection.transaction()?;
         check(&mut tx)?;
         tx.rollback()?;
-        extensions.verifier.verify(
+        extensions.budget.check(&record.owner)?;
+        extensions.verifier.verify_anonymous(
             &ExtensionStatement::Record {
                 policy: extensions.policy.clone(),
                 record: record.clone(),

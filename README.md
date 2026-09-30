@@ -49,3 +49,10 @@ The admission issuer supplies the verified cpsd community pseudonym hashed to
 32 bytes. cpsd main exposes canonical 48-byte pseudonyms; this facade consumes the
 issuer's signed admission rather than re-verifying its BBS presentation. Root
 rotation is a dual-signed continuity update, never a new accounting identity.
+
+Security dependency survey (2026-09-30): `cthl` main exposes bounded ephemeral
+rate limits over maintained `governor`; use its pinned API before anonymous proof
+verification. `cpns` main exposes `ChangeTokenVerifier` and atomic pin revision
+checks; use the pinned API for exact owner/member and change binding. The process
+extension adapter allocates separate authenticated and anonymous cvfy pools.
+No alternate throttling algorithm or cryptographic primitive is implemented here.

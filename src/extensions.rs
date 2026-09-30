@@ -125,19 +125,14 @@ pub enum ExtensionStatement {
 pub trait ExtensionVerifier: Send {
     fn scope(&self) -> AccountProofScope;
     fn verify(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error>;
-}
-impl ExtensionVerifier for cvfy::ProcessVerifier {
-    fn scope(&self) -> AccountProofScope {
-        self.scope()
-    }
-    fn verify(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error> {
-        self.verify(statement, proof)
-    }
+    /// Use a separate bounded pool for unauthenticated work.
+    fn verify_anonymous(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error>;
 }
 pub(crate) struct Extensions {
     pub policy: ExtensionPolicy,
     pub verifier: Box<dyn ExtensionVerifier>,
     pub config: Vec<u8>,
+    pub budget: crate::verification::Budget,
 }
 pub(crate) fn inbox(tx: &mut Transaction<'_>, owner: &[u8; 32]) -> Result<Inbox, Error> {
     Ok(tx.get(&key(5, &[owner]))?.unwrap_or_default())

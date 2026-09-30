@@ -20,7 +20,7 @@ jobs:
         with:
           cache-on-failure: true
       - run: rustc --version && cargo fmt --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo clippy --all-targets -- -D warnings
       - uses: actions/setup-node@v4
         with:
           node-version: 24

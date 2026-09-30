@@ -5,6 +5,9 @@ use cblc::extensions::*;
 
 struct SignedBoundary(SigningKey);
 impl ExtensionVerifier for SignedBoundary {
+    fn verify_anonymous(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error> {
+        self.verify(statement, proof)
+    }
     fn scope(&self) -> AccountProofScope {
         AccountProofScope {
             circuit_digest: [51; 32],
@@ -21,6 +24,14 @@ impl ExtensionVerifier for SignedBoundary {
 }
 fn backend() -> SignedBoundary {
     SignedBoundary(SigningKey::from_bytes(&[50; 32]))
+}
+fn limits() -> cblc::verification::ExtensionLimits {
+    cblc::verification::ExtensionLimits {
+        global_burst: 100,
+        subject_burst: 100,
+        replenish: Duration::from_secs(100),
+        maximum_keys: std::num::NonZeroUsize::new(128).unwrap(),
+    }
 }
 fn settings() -> ExtensionPolicy {
     ExtensionPolicy {
@@ -92,7 +103,7 @@ fn punishment_cannot_be_ignored_replayed_or_reset_after_restart() {
     let path = dir.path().join("ledger");
     let f = Fixture::new();
     let mut ledger = open(&path, &f, StorageOnlyVerifier::default())
-        .with_extensions(settings(), backend())
+        .with_extensions(settings(), backend(), limits())
         .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let mut update = ExtendedUpdate {
@@ -130,7 +141,7 @@ fn punishment_cannot_be_ignored_replayed_or_reset_after_restart() {
     );
     drop(ledger);
     let mut ledger = open(&path, &f, StorageOnlyVerifier::default())
-        .with_extensions(settings(), backend())
+        .with_extensions(settings(), backend(), limits())
         .unwrap();
     let next = signed_update(successor(&first, &f, 11), &update, &f);
     assert_eq!(
@@ -192,7 +203,7 @@ fn relative_record_is_bound_to_quorum_current_state_and_every_obligation() {
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap()
-    .with_extensions(settings(), backend())
+    .with_extensions(settings(), backend(), limits())
     .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let update = ExtendedUpdate {
@@ -291,7 +302,7 @@ fn change_token_is_a_bound_single_successor_spend() {
     let dir = tempfile::tempdir().unwrap();
     let f = Fixture::new();
     let mut ledger = open(&dir.path().join("db"), &f, StorageOnlyVerifier::default())
-        .with_extensions(settings(), backend())
+        .with_extensions(settings(), backend(), limits())
         .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let initial = ExtendedUpdate {
@@ -363,6 +374,9 @@ struct PausedExtension {
     release: Receiver<()>,
 }
 impl ExtensionVerifier for PausedExtension {
+    fn verify_anonymous(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error> {
+        self.verify(statement, proof)
+    }
     fn scope(&self) -> AccountProofScope {
         backend().scope()
     }
@@ -380,7 +394,7 @@ fn a_deposit_racing_verification_cannot_be_skipped_at_commit() {
     let path = dir.path().join("db");
     let f = Fixture::new();
     let mut fast = open(&path, &f, StorageOnlyVerifier::default())
-        .with_extensions(settings(), backend())
+        .with_extensions(settings(), backend(), limits())
         .unwrap();
     fast.admit_checkpoint(0, fr(8)).unwrap();
     let update = ExtendedUpdate {
@@ -401,7 +415,7 @@ fn a_deposit_racing_verification_cannot_be_skipped_at_commit() {
     let (entered, observed) = mpsc::channel();
     let (resume, release) = mpsc::channel();
     let mut slow = open(&path, &f, StorageOnlyVerifier::default())
-        .with_extensions(settings(), PausedExtension { entered, release })
+        .with_extensions(settings(), PausedExtension { entered, release }, limits())
         .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
@@ -432,7 +446,7 @@ fn contact_and_listing_require_fresh_current_record_even_below_quorum() {
         &f,
         StorageOnlyVerifier::default(),
     )
-    .with_extensions(settings(), backend())
+    .with_extensions(settings(), backend(), limits())
     .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let update = ExtendedUpdate {
@@ -526,7 +540,7 @@ fn settlement_wire_has_no_punishment_tag_or_lifetime_count_and_consumption_delet
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap()
-    .with_extensions(settings(), backend())
+    .with_extensions(settings(), backend(), limits())
     .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let mut update = ExtendedUpdate {
@@ -591,4 +605,186 @@ fn settlement_wire_has_no_punishment_tag_or_lifetime_count_and_consumption_delet
         ledger.apply_extended(&g, &a, &request, &stale, || 130),
         Err(Error::Replay)
     );
+}
+
+#[test]
+fn anonymous_budget_follows_cheap_checks_and_does_not_block_authenticated_updates() {
+    let f = Fixture::new();
+    let dir = tempfile::tempdir().unwrap();
+    let mut resources = limits();
+    resources.global_burst = 1;
+    resources.subject_burst = 1;
+    let mut ledger = open(
+        &dir.path().join("budget"),
+        &f,
+        StorageOnlyVerifier::default(),
+    )
+    .with_extensions(settings(), backend(), resources)
+    .unwrap();
+    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let update = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
+        inbox: Inbox::default(),
+        effect: Effect::Update,
+    };
+    let first = signed_update(genesis(&f), &update, &f);
+    let g = f.grant(7, &f.device);
+    let a = f.authorize(7, &f.device);
+    ledger
+        .apply_extended(&g, &a, &first, &update, || 120)
+        .unwrap();
+    let mut record = PublicRecord {
+        context: RecordContext {
+            purpose: RecordUse::FirstContact,
+            challenge: [22; 32],
+            expires_at: 180,
+        },
+        community: first.statement.community,
+        owner: first.statement.owner,
+        version: 1,
+        state: first.statement.next_state,
+        inbox: Inbox::default(),
+        shares: None,
+    };
+    let signed = |record: &PublicRecord| {
+        proof(&ExtensionStatement::Record {
+            policy: settings(),
+            record: record.clone(),
+        })
+    };
+    assert_eq!(
+        ledger.check_record(
+            record.owner,
+            &record.context,
+            &record,
+            &signed(&record),
+            || 130
+        ),
+        Err(Error::Replay)
+    );
+    record.version = 0;
+    assert_eq!(
+        ledger.check_record(
+            record.owner,
+            &record.context,
+            &record,
+            &signed(&record),
+            || 130
+        ),
+        Ok(None)
+    );
+    assert_eq!(
+        ledger.check_record(
+            record.owner,
+            &record.context,
+            &record,
+            &signed(&record),
+            || 130
+        ),
+        Err(Error::Capacity)
+    );
+    let next = signed_update(successor(&first, &f, 11), &update, &f);
+    ledger
+        .apply_extended(&g, &a, &next, &update, || 130)
+        .unwrap();
+}
+
+#[test]
+fn cpns_consumes_only_the_exact_members_completed_spend() {
+    use cblc::pins::{PinSpendVerifier, SpentChange, change_binding};
+    use cpns::{
+        Fingerprint,
+        server::{Change, ChangeTokenVerifier, MemoryStore, Pin, Pins},
+    };
+    let f = Fixture::new();
+    let dir = tempfile::tempdir().unwrap();
+    let mut ledger = open(&dir.path().join("pins"), &f, StorageOnlyVerifier::default())
+        .with_extensions(settings(), backend(), limits())
+        .unwrap();
+    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let initial = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
+        inbox: Inbox::default(),
+        effect: Effect::Update,
+    };
+    let first = signed_update(genesis(&f), &initial, &f);
+    let g = f.grant(7, &f.device);
+    let a = f.authorize(7, &f.device);
+    ledger
+        .apply_extended(&g, &a, &first, &initial, || 120)
+        .unwrap();
+    let member = data_encoding::HEXLOWER.encode(&[7; 48]);
+    let other_member = data_encoding::HEXLOWER.encode(&[8; 48]);
+    let expected = Pin {
+        fingerprint: Fingerprint::from_bytes([1; 32]),
+        revision: 1,
+    };
+    let replacement = Fingerprint::from_bytes([2; 32]);
+    let change = Change {
+        community: "community.example",
+        member: &member,
+        field: "age",
+        expected,
+        replacement,
+    };
+    let binding = change_binding(&change).unwrap();
+    let update = ExtendedUpdate {
+        effect: Effect::Change { binding },
+        ..initial
+    };
+    let request = signed_update(successor(&first, &f, 11), &update, &f);
+    let acceptance = ledger
+        .apply_extended(&g, &a, &request, &update, || 130)
+        .unwrap();
+    let token = SpentChange {
+        acceptance,
+        request,
+        update,
+    };
+    let verifier = PinSpendVerifier {
+        operator_key: SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes(),
+        scope: backend().scope(),
+        policy: settings(),
+    };
+    futures::executor::block_on(async {
+        assert!(verifier.verify_spent(&change, &token).await.is_ok());
+        for changed in [
+            Change {
+                member: &other_member,
+                ..change
+            },
+            Change {
+                field: "location",
+                ..change
+            },
+            Change {
+                expected: Pin {
+                    revision: 2,
+                    ..expected
+                },
+                ..change
+            },
+            Change {
+                replacement: Fingerprint::from_bytes([3; 32]),
+                ..change
+            },
+        ] {
+            assert_ne!(change_binding(&changed).unwrap(), binding);
+            assert!(verifier.verify_spent(&changed, &token).await.is_err());
+        }
+        let pins = Pins::new(MemoryStore::new("community.example").unwrap(), verifier);
+        pins.pin(&member, "age", expected.fingerprint)
+            .await
+            .unwrap();
+        let changed = pins
+            .change(&member, "age", expected, replacement, &token)
+            .await
+            .unwrap();
+        assert_eq!(changed.revision, 2);
+        assert!(
+            pins.change(&member, "age", expected, replacement, &token)
+                .await
+                .is_err()
+        );
+    });
 }

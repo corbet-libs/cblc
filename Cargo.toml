@@ -18,6 +18,9 @@ unsafe_code = "forbid"
 missing_docs = "warn"
 
 [dependencies]
+cthl = { git = "https://github.com/corbet-foss/cthl", rev = "7f1a38de4285dee4b15ee8f9e82c1cb257513644" }
+cpns = { git = "https://github.com/corbet-foss/cpns", rev = "23968a9fa338791e70078c6070a6f1f3cf185ff7", default-features = false }
+futures = "0.3"
 czkp = { git = "https://github.com/corbet-foss/czkp", branch = "main" }
 cvfy = { git = "https://github.com/corbet-foss/cvfy", branch = "main" }
 cssr = { git = "https://github.com/corbet-foss/cssr", branch = "main" }
