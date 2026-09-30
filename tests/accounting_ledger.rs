@@ -6,7 +6,9 @@ use cblc::{Error, accounting::*, accounting_ledger::*};
 use common::Fixture;
 use data_encoding::BASE64URL_NOPAD as B64;
 use ed25519_dalek::{Signer, SigningKey};
-use rusqlite::{Connection, params};
+#[path = "support/inspect.rs"]
+mod inspection;
+use inspection::Connection;
 use sha2::{Digest, Sha256};
 use std::{
     cell::Cell,
@@ -748,7 +750,7 @@ fn independent_processes_race_and_reopen_returns_the_committed_winner() {
     let winner: Vec<u8> = db
         .query_row(
             "SELECT latest_request FROM frontiers WHERE owner=?1",
-            params![genesis(&f).statement.owner.as_slice()],
+            [genesis(&f).statement.owner.to_vec()],
             |r| r.get(0),
         )
         .unwrap();
@@ -773,27 +775,7 @@ fn independent_processes_race_and_reopen_returns_the_committed_winner() {
 mod tuning;
 
 fn inspect(path: &Path) -> Connection {
-    let db = Connection::open(path).unwrap();
-    db.create_scalar_function(
-        "bytes",
-        1,
-        rusqlite::functions::FunctionFlags::SQLITE_DETERMINISTIC,
-        |ctx| {
-            let json: String = ctx.get(0)?;
-            Ok(serde_json::from_str::<Vec<u8>>(&json).unwrap())
-        },
-    )
-    .unwrap();
-    // TEMP inspection views never change the production schema or use unscoped reads.
-    db.execute_batch("CREATE TEMP VIEW frontiers AS SELECT
-      bytes(json_extract(CAST(value AS TEXT),'$.state')) AS state,
-      bytes(json_extract(CAST(value AS TEXT),'$.latest_request')) AS latest_request,
-      json_extract(CAST(value AS TEXT),'$.version') AS version, substr(key,10,32) AS owner
-      FROM cssr_records WHERE community_id='community.example' AND substr(key,1,1)=x'01';
-      CREATE TEMP VIEW latest_acceptances AS SELECT value FROM cssr_records WHERE community_id='community.example' AND substr(key,1,1)=x'02';
-      CREATE TEMP VIEW markers AS SELECT substr(key,50,32) AS marker FROM cssr_records WHERE community_id='community.example' AND substr(key,1,1)=x'04';
-      CREATE TEMP VIEW configuration AS SELECT CAST(value AS INTEGER) AS clock_floor FROM cssr_records WHERE community_id='community.example' AND key=x'636c6f636b';").unwrap();
-    db
+    Connection::open(path).unwrap()
 }
 
 #[path = "accounting_ledger/extensions.rs"]

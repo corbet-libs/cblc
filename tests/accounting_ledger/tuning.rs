@@ -4,15 +4,7 @@
 use super::*;
 
 fn stored(path: &Path) -> Vec<(Vec<u8>, Vec<u8>)> {
-    let db = Connection::open(path).unwrap();
-    db.prepare(
-        "SELECT key,value FROM cssr_records WHERE community_id='community.example' ORDER BY key",
-    )
-    .unwrap()
-    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-    .unwrap()
-    .collect::<rusqlite::Result<_>>()
-    .unwrap()
+    Connection::open(path).unwrap().snapshot()
 }
 
 fn with_policy(
