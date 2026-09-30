@@ -38,10 +38,13 @@ GitHub Actions runs fmt, clippy with warnings denied, Rust integration tests and
 JavaScript contract tests. The legacy circuits and browser experiments remain
 validation tooling, excluded from the server API. Real proof acceptance and
 storage tests have distinct evidence; historical reports are not new CI results.
-Punishment inbox enforcement, change-spend binding and relative-record checks are
-available only in the explicitly selected `extension-issuer-harness` feature.
-Default builds reject extension activation, even with a supplied verifier. The
-complete extension circuit/holder implementation is not shipped; see [extension requirements](docs/EXTENSIONS.md).
+The three extension circuits prove punishment, inbox ingestion, change spends
+and quorum records. Member witness construction lives in
+[cwlt](https://github.com/corbet-foss/cwlt), with a native/wasm Rust planner and
+an adapter to the existing Noir/Barretenberg stack. Activation requires a real
+genesis probe through the pinned worker; no synthetic extension verifier ships.
+See [the extension contract](docs/EXTENSIONS.md) and
+[security status](docs/SECURITY-STATUS.md) for validation and trust boundaries.
 See [CONTRACT](docs/CONTRACT.md) and [migration](docs/MIGRATION.md).
 
 Copyright 2026 Julian Y. Richard Corbet. [FSL-1.1-ALv2](LICENSE.md).
@@ -59,7 +62,7 @@ extension adapter allocates separate authenticated and anonymous cvfy pools.
 No alternate throttling algorithm or cryptographic primitive is implemented here.
 
 
-The Rust and storage checks are separate from dependency-audit status. The new
-cargo-deny gate currently fails on libsql's transitive HTTP/TLS advisories; see
-[security status](docs/SECURITY-STATUS.md). No advisory is ignored to obtain a
-passing audit. The optional Turso test remains skipped without both credentials.
+The cargo-deny gate uses narrowly scoped inherited libSQL transport exceptions
+with locked-version and upstream-source checks; see
+[dependency exposure](docs/DEPENDENCIES.md). Two TLS name-constraint risks and an
+unmaintained parser remain open. The optional Turso test requires both credentials.
