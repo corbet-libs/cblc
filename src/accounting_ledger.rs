@@ -27,6 +27,9 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 
 mod extensions;
+mod rotation;
+use rotation::check_root;
+pub use rotation::{RootRotation, root_rotation_bytes};
 mod tuning;
 use self::extensions::check_extension_config;
 use crate::extensions::{ExtendedUpdate, ExtensionStatement, Extensions};
@@ -68,6 +71,7 @@ fn check_time(now: u64, floor: u64) -> Result<(), Error> {
 #[derive(Serialize, Deserialize)]
 struct Frontier {
     root_key: [u8; 32],
+    root_revision: u64,
     version: u64,
     state: [u8; 32],
     latest_request: [u8; 32],
@@ -339,6 +343,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         verify_admission(grant, &self.trust, now)?;
         verify_device_authorization(authorization, grant, now)?;
         check_extension_config(&mut transaction, extension.map(|(e, _)| e))?;
+        check_root(&mut transaction, &statement.owner, &root_key)?;
         if let Some((_, update)) = extension
             && crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox
         {
@@ -404,6 +409,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         // A concurrent exact request may already have committed. Recover its
         // original response before applying expiry/CAS checks to a fresh write.
         check_extension_config(&mut transaction, extension.map(|(e, _)| e))?;
+        check_root(&mut transaction, &statement.owner, &root_key)?;
         if let Some((_, update)) = extension
             && crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox
         {
@@ -457,10 +463,14 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 &true,
             )?;
         }
+        let root_revision = transaction
+            .get::<Frontier>(&key(1, &[&statement.owner]))?
+            .map_or(0, |prior| prior.root_revision);
         transaction.put(
             &key(1, &[&statement.owner]),
             &Frontier {
                 root_key,
+                root_revision,
                 version: statement.next_version,
                 state: statement.next_state,
                 latest_request: request.request_id,
@@ -510,6 +520,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         if now < request.issued_at || now >= request.expires_at {
             return Err(Error::Expired);
         }
+        check_root(
+            &mut transaction,
+            &request.owner,
+            &decode::<32>(&authorization.root_public_key)?,
+        )?;
         let request_id = match request.request_id {
             Some(id) => Some(id),
             None => transaction

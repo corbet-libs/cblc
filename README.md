@@ -44,3 +44,8 @@ circuit/holder implementation is not shipped; see [extension requirements](docs/
 See [CONTRACT](docs/CONTRACT.md) and [migration](docs/MIGRATION.md).
 
 Copyright 2026 Julian Y. Richard Corbet. [FSL-1.1-ALv2](LICENSE.md).
+
+The admission issuer supplies the verified cpsd community pseudonym hashed to
+32 bytes. cpsd main exposes canonical 48-byte pseudonyms; this facade consumes the
+issuer's signed admission rather than re-verifying its BBS presentation. Root
+rotation is a dual-signed continuity update, never a new accounting identity.

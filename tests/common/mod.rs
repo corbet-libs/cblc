@@ -8,14 +8,8 @@ pub fn encoded(value: u8) -> String {
 }
 
 pub fn member_id(member: u8) -> String {
-    let root = SigningKey::from_bytes(&[member; 32]);
-    let bytes = serde_json::to_vec(&serde_json::json!([
-        "cmsg.member.v1",
-        "community.example",
-        BASE64URL_NOPAD.encode(&root.verifying_key().to_bytes())
-    ]))
-    .unwrap();
-    BASE64URL_NOPAD.encode(&Sha256::digest(bytes))
+    // Synthetic canonical-length pseudonym bytes, independent of the root key.
+    BASE64URL_NOPAD.encode(&Sha256::digest([member; 48]))
 }
 
 pub struct Fixture {

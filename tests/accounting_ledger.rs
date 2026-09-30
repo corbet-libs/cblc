@@ -780,3 +780,60 @@ fn inspect(path: &Path) -> Connection {
 
 #[path = "accounting_ledger/extensions.rs"]
 mod extensions;
+
+#[test]
+fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("continuity.sqlite");
+    let f = Fixture::new();
+    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
+    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let g = f.grant(7, &f.device);
+    let old = f.authorize(7, &f.device);
+    let first = genesis(&f);
+    let accepted = ledger.apply(&g, &old, &first, || 120).unwrap();
+    let root = SigningKey::from_bytes(&[7; 32]);
+    let new = SigningKey::from_bytes(&[99; 32]);
+    let mut auth = old.clone();
+    auth.root_public_key = B64.encode(&new.verifying_key().to_bytes());
+    auth.signature = B64.encode(
+        &new.sign(&cblc::admission::device_authorization_bytes(&auth).unwrap())
+            .to_bytes(),
+    );
+    assert_eq!(
+        ledger.apply(&g, &auth, &first, || 120),
+        Err(Error::Admission)
+    );
+    let mut rotation = RootRotation {
+        community: first.statement.community,
+        owner: first.statement.owner,
+        expected_revision: 0,
+        expected_version: 0,
+        expected_state: first.statement.next_state,
+        old_root: old.root_public_key.clone(),
+        new_root: auth.root_public_key.clone(),
+        old_signature: String::new(),
+        new_signature: String::new(),
+    };
+    let bytes = root_rotation_bytes(&rotation).unwrap();
+    rotation.old_signature = B64.encode(&root.sign(&bytes).to_bytes());
+    rotation.new_signature = B64.encode(&new.sign(&bytes).to_bytes());
+    let mut forged = rotation.clone();
+    forged.old_signature = forged.new_signature.clone();
+    assert_eq!(ledger.rotate_root(&forged), Err(Error::Signature));
+    ledger.rotate_root(&rotation).unwrap();
+    assert_eq!(ledger.rotate_root(&rotation), Err(Error::Replay));
+    drop(ledger);
+    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
+    assert_eq!(
+        ledger.apply(&g, &old, &first, || 120),
+        Err(Error::Admission)
+    );
+    assert_eq!(ledger.apply(&g, &auth, &first, || 120).unwrap(), accepted);
+    let mut reopen = first.clone();
+    reopen.request_id = [99; 32];
+    sign(&mut reopen, &f.device);
+    assert_eq!(ledger.apply(&g, &auth, &reopen, || 120), Err(Error::Replay));
+    let next = successor(&first, &f, 13);
+    assert!(ledger.apply(&g, &auth, &next, || 130).is_ok());
+}

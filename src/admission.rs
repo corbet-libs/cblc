@@ -93,22 +93,11 @@ pub struct DeviceAuthorization {
     pub signature: String,
 }
 
-pub fn member_id(community: &str, root_public_key: &str) -> Result<String, Error> {
-    if !scope(community) {
-        return Err(Error::InvalidInput);
-    }
-    let key =
-        VerifyingKey::from_bytes(&decode::<32>(root_public_key)?).map_err(|_| Error::Admission)?;
-    if key.is_weak() {
-        return Err(Error::Admission);
-    }
-    let bytes = serde_json::to_vec(&serde_json::json!([
-        "cmsg.member.v1",
-        community,
-        root_public_key
-    ]))
-    .map_err(|_| Error::InvalidInput)?;
-    Ok(digest(&bytes))
+/// Account owner: SHA-256 of the canonical 48-byte community pseudonym returned
+/// by cpsd verification. This function is an encoding adapter, not verification;
+/// the admission issuer must authenticate the presentation before signing a grant.
+pub fn member_id(pseudonym: &[u8; 48]) -> String {
+    digest(pseudonym)
 }
 
 pub fn device_authorization_bytes(value: &DeviceAuthorization) -> Result<Vec<u8>, Error> {
@@ -116,8 +105,14 @@ pub fn device_authorization_bytes(value: &DeviceAuthorization) -> Result<Vec<u8>
         || value.issued_at == 0
         || value.issued_at >= value.expires_at
         || value.expires_at > MAX_INTEGER
-        || member_id(&value.community_id, &value.root_public_key)? != value.member_id
+        || !scope(&value.community_id)
     {
+        return Err(Error::Admission);
+    }
+    decode::<32>(&value.member_id)?;
+    let root = VerifyingKey::from_bytes(&decode::<32>(&value.root_public_key)?)
+        .map_err(|_| Error::Admission)?;
+    if root.is_weak() {
         return Err(Error::Admission);
     }
     let key = VerifyingKey::from_bytes(&decode::<32>(&value.device_public_key)?)

@@ -32,7 +32,7 @@ pub(super) fn config_bytes(
     tuning_revision: u64,
 ) -> Result<Vec<u8>, Error> {
     serde_json::to_vec(&StoredConfig {
-        format: "cfrm.account.database.v2".into(),
+        format: "cblc.account.database.v3".into(),
         community_id: trust.community_id.clone(),
         admission_policy_digest: trust.policy_digest.clone(),
         issuer_public_key: trust.issuer_public_key,

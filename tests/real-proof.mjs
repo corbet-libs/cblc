@@ -53,7 +53,7 @@ try {
   for(let index=0;index<2;index++) {
     const root=createPrivateKey({format:'der',type:'pkcs8',key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.alloc(32,7+index)])});
     const publicRoot=createPublicKey(root).export({format:'der',type:'spki'}).subarray(-32).toString('base64url');
-    const memberId=createHash('sha256').update(JSON.stringify(['cmsg.member.v1','community.example',publicRoot])).digest('base64url');
+    const memberId=createHash('sha256').update(Buffer.alloc(48, 7+index)).digest('base64url');
     const key=generateKeyPairSync('ec',{namedCurve:'prime256v1'}).publicKey.export({format:'jwk'});
     entries.push({memberId,accountKey:Buffer.concat([Buffer.from(key.x,'base64url'),Buffer.from(key.y,'base64url')]).toString('hex'),
       secretHash:hex(await hashes.secretHash(community,bytes(10+index))),issuedAt:1,expiresAt:10000,delegationDigest:hex(bytes(30+index))});

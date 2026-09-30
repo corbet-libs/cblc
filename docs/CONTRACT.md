@@ -40,3 +40,14 @@ extension activation must be separate from v2 acceptance.
 Extension issuer APIs (`with_extensions`, `apply_extended`, `deposit`,
 `obligations`, `public_record`) and their activation boundary are specified in
 [EXTENSIONS.md](EXTENSIONS.md). They are not enabled by the legacy v2 verifier.
+
+Account database format v3 binds the owner to `SHA-256(cpsd::Pseudonym::to_bytes())`,
+encoded as unpadded base64url in the signed admission. cmnt must verify cpsd before
+issuing that admission; cblc never infers identity from a root. `member_id` is only
+an encoding helper over those verified canonical bytes. There is one lifetime
+frontier per pseudonym and no deletion/reset API. `rotate_root` requires signatures
+from both roots over the community, owner, current state/version and a monotonic
+root revision. It changes authority only, preserving every accounting marker.
+Old roots lose access even to cached acceptances and status. Legacy v2 databases
+fail configuration checks; they require an explicit pseudonym migration, never an
+automatic fresh genesis.
