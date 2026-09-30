@@ -365,7 +365,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cvfy?rev=03d1f87e5edfa5a60ddd9e0a71d23864f0dbfb69#03d1f87e5edfa5a60ddd9e0a71d23864f0dbfb69"
+source = "git+https://github.com/corbet-foss/cvfy?rev=b1bbc914cd8e193404111e64555998652d7921eb#b1bbc914cd8e193404111e64555998652d7921eb"
 dependencies = [
  "czkp",
  "data-encoding",

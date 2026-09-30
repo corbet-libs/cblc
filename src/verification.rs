@@ -59,6 +59,9 @@ impl ProcessExtensionVerifier {
         updates: cvfy::ProcessVerifierConfig,
         anonymous: cvfy::ProcessVerifierConfig,
     ) -> Result<Self, Error> {
+        if updates.max_proof_bytes < crate::extensions::EXTENSION_PROOF_BYTES {
+            return Err(Error::InvalidInput);
+        }
         if updates.scope != anonymous.scope
             || updates.script != anonymous.script
             || updates.artifact_config != anonymous.artifact_config

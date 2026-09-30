@@ -47,7 +47,7 @@ fn config(scope: AccountProofScope) -> cvfy::ProcessVerifierConfig {
         scope,
         timeout: Duration::from_secs(180),
         maximum_parallel: 1,
-        max_proof_bytes: 1024 * 1024,
+        max_proof_bytes: EXTENSION_PROOF_BYTES,
         node_heap_megabytes: 4096,
     }
 }
@@ -72,7 +72,7 @@ fn main() {
                     let settings = AccountLedgerPolicy {
                         account: serde_json::from_value(v["policy"].clone()).unwrap(),
                         max_authorization_seconds: 100,
-                        max_proof_bytes: 1024 * 1024,
+                        max_proof_bytes: EXTENSION_PROOF_BYTES,
                         checkpoint_period_seconds: 1000,
                     };
                     let verifier = ProcessExtensionVerifier::new(

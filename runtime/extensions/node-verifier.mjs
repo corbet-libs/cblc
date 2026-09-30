@@ -8,7 +8,7 @@ import {createVerifier} from '@corbet-labs/czkp/verify';
 import {unhex} from '@corbet-labs/czkp/encoding';
 export async function verify(record,artifacts) {
   if(!exact(record,['statement','proof','proofScope'])||!exact(record.proofScope,['circuitDigest','verifyingKeyDigest'])||!equal(record.proofScope.circuitDigest,artifacts.scope.circuitDigest)||!equal(record.proofScope.verifyingKeyDigest,artifacts.scope.verifyingKeyDigest)
-      ||typeof record.proof!=='string'||record.proof.length>2*1024*1024)throw new Error('Proof scope/bound');
+      ||typeof record.proof!=='string'||record.proof.length>8*1024*1024)throw new Error('Proof scope/bound');
   const bundle=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(unhex(record.proof)));
   const expected=await expectedProofs(record.statement,bundle,artifacts.manifest);
   const selected=artifacts.artifacts(expected[0].kind);
@@ -21,7 +21,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).hr
   console.log=()=>{};
   try {
     if(process.argv.length!==3)throw new Error('Trusted configuration required');
-    const chunks=[];let size=0;for await(const chunk of process.stdin){size+=chunk.length;if(size>3*1024*1024)throw new Error('Input bound');chunks.push(chunk);}
+    const chunks=[];let size=0;for await(const chunk of process.stdin){size+=chunk.length;if(size>9*1024*1024)throw new Error('Input bound');chunks.push(chunk);}
     const result=await verify(JSON.parse(Buffer.concat(chunks)),await loadArtifacts(process.argv[2]));
     process.stdout.write(JSON.stringify(result)+'\n');
   }catch{process.exitCode=1;}

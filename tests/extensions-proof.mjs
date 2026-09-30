@@ -97,6 +97,10 @@ try{
   const genesis=[];
   for(let i=0;i<4;i++)genesis.push(await ExtensionWitness.genesis({hashes,community,policy,extension,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++}));
   genesis[0].preparedProof=await proof('update',genesis[0].input,'genesis');
+  // Capacity uses the actual pinned proof size, including hex/JSON framing.
+  // This checks the transport bound only; repeated genesis is not a valid chain.
+  const capacityProbe=encodeBundle(Array.from({length:65},()=>({state:Array(32).fill(255),inbox:Array(32).fill(255),proof:genesis[0].preparedProof})));
+  assert(capacityProbe.length/2<=4*1024*1024);
   const activation={account:genesis[0].statement,proof:encodeBundle([{state:genesis[0].statement.nextState,inbox:Array(32).fill(0),proof:genesis[0].preparedProof}])};
   const initialize={op:'init',policy,extension,scope:artifacts.scope,root:toArray((await import('@corbet-labs/czkp/primitives')).fieldBytes(checkpoint.root)),activation};
   const badActivation=structuredClone(initialize);

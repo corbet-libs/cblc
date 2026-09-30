@@ -23,6 +23,9 @@ Acceptances pin the circuit/key group digests. setup-lock.json pins the upstream
 compressed G1 prefix and G2 bytes. Verification initializes one authenticated G1
 chunk; proving uses the full pinned table. The worker downloads nothing.
 CI's fictional issuer key and generated artifacts are not a production release.
+The account policy and authenticated verifier pool must allow four MiB proof
+envelopes; activation rejects smaller budgets. The 65-proof framing check uses
+the actual generated proof size in CI. Anonymous pools may use a smaller bound.
 
 ## Seven mandatory constraints
 

@@ -55,7 +55,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         {
             return Err(Error::PolicyMismatch);
         }
-        if !activation.account.genesis
+        if self.policy.max_proof_bytes < extensions::EXTENSION_PROOF_BYTES
+            || !activation.account.genesis
             || activation.account.community != self.community
             || activation.account.policy != self.policy.account
             || activation.proof.is_empty()

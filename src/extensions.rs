@@ -130,6 +130,9 @@ pub enum ExtensionStatement {
 pub(crate) mod sealed {
     pub trait Sealed {}
 }
+/// Required transport budget for 64 ingestion proofs plus one final action.
+/// The pinned proof encoding and its JSON framing fit within this bounded size.
+pub const EXTENSION_PROOF_BYTES: usize = 4 * 1024 * 1024;
 /// Backend for the complete extension relation. Only the shipped process adapter
 /// implements this sealed trait; a caller cannot substitute a signed verdict.
 pub trait ExtensionVerifier: sealed::Sealed + Send {

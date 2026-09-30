@@ -837,7 +837,8 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
 
 #[test]
 fn extension_activation_requires_a_real_proof() {
-    let f = Fixture::new();
+    let mut f = Fixture::new();
+    f.policy.max_proof_bytes = cblc::extensions::EXTENSION_PROOF_BYTES;
     let activation = cblc::extensions::ExtensionActivation {
         account: genesis(&f).statement,
         proof: vec![],
@@ -860,7 +861,7 @@ fn extension_activation_requires_a_real_proof() {
         },
         timeout: Duration::from_secs(1),
         maximum_parallel: 1,
-        max_proof_bytes: 1024,
+        max_proof_bytes: cblc::extensions::EXTENSION_PROOF_BYTES,
         node_heap_megabytes: 64,
     };
     let verifier =
