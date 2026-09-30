@@ -112,7 +112,7 @@ fn main() {
                     sequence = sequence.checked_add(1).unwrap();
                     let mut request = AccountRequest {
                         issued_at: statement.now,
-                        expires_at: statement.now + 60,
+                        expires_at: statement.valid_until,
                         statement,
                         request_id: [sequence; 32],
                         proof_scope: scope.clone().unwrap(),

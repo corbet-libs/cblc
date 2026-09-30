@@ -93,10 +93,10 @@ try{
   await call({op:'init',policy,extension,scope:artifacts.scope,root:toArray((await import('@corbet-labs/czkp/primitives')).fieldBytes(checkpoint.root))});
   for(let i=0;i<4;i++){
     const g=await ExtensionWitness.genesis({hashes,community,policy,extension,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++});
-    members[i]=(await submit(7+i,[g],'genesis',i===0)).next;
+    members[i]=(await submit(7+i,[g],'genesis')).next;
   }
   const record=async(index,label,measure=false)=>anonymous(members[index].record({purpose:'forumListing',challenge:toArray(bytes(now%255)),expiresAt:now+90}),label,measure);
-  const stale=await record(0,'record-below-quorum',true);
+  const stale=await record(0,'record-below-quorum');
   assert.equal(await call({op:'record',record:stale.statement.record,proof:stale.proof,now}),null);
   let nonce=60;
   const signContact=(index,owner,slot)=>canonicalSignature(sign('sha256',contactBytes(community,owner,slot),{key:signing[index],dsaEncoding:'ieee-p1363'}));
@@ -146,9 +146,61 @@ try{
   const change=await members[0].changeToken(binding,now++);
   const badOwner=structuredClone(change.input);badOwner.owner=members[2].owner.member;
   await assert.rejects(new Noir(programs.update).execute(witnessInputs(programs.update,badOwner)));
-  const spent=await submit(7,[change],'change-token',true);members[0]=spent.next;
+  const spent=await submit(7,[change],'change-token');members[0]=spent.next;
   await call({op:'pins',member:7});
   await call(spent.request,false); // Same predecessor/marker cannot authorize a new request.
-  console.log('Real proofs passed punishment, forced ingestion, pin spend and negative scenarios');
+  // A genuine counterpart Answer supplies the second counted first contact.
+  const acceptedContact=await contact(0,2);
+  members[2]=(await submit(9,[await members[2].activate(acceptedContact.incoming,now++,acceptedContact.senderSignature)],'activate')).next;
+  const replySlot=members[2].slots.get(acceptedContact.incoming.toString());
+  const resolution={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
+  const replyBytes=receiptBytes(community,members[2].owner.member,members[0].owner.member,replySlot,members[2].owner.delegationDigest,resolution);
+  resolution.signature=canonicalSignature(sign('sha256',replyBytes,{key:signing[2],dsaEncoding:'ieee-p1363'}));
+  const answerDigest=await receiptDigest(replyBytes,resolution.signature);
+  const acknowledgment={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[0].owner.member,members[2].owner.member,replySlot,answerDigest,members[0].owner.delegationDigest,now),{key:signing[0],dsaEncoding:'ieee-p1363'}))};
+  members[2]=(await submit(9,[await members[2].settle(acceptedContact.incoming,resolution,acknowledgment,now++)],'answer')).next;
+  now=Math.ceil((now+10)/10)*10;
+  const answerCandidate=await members[2].deposit({slot:replySlot,kind:1},members[2].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10);
+  const forged=structuredClone(answerCandidate.input);forged.certificate=Array(64).fill(0);
+  await assert.rejects(new Noir(programs.deposit).execute(witnessInputs(programs.deposit,forged)));
+  const answer=await anonymous(answerCandidate,'answer-deposit');
+  await call({op:'deposit',batch:[{deposit:answer.statement.deposit,proof:answer.proof},batch[1]],now});
+  await drain(0);
+  assert.equal(members[0].opening.accepted,1n);assert.equal(members[0].opening.punished,1n);
+  const visible=await record(0,'record-quorum',true);
+  assert.deepEqual(await call({op:'record',record:visible.statement.record,proof:visible.proof,now}),[5000,0,5000]);
+  const falseShares=structuredClone(visible.statement.record);falseShares.shares=[5001,0,4999];
+  await call({op:'record',record:falseShares,proof:visible.proof,now},false);
+  // Spend the last available unit, then punish an established conversation at zero.
+  members[0]=(await submit(7,[await members[0].changeToken(bytes(211),now++)],'second-change')).next;
+  assert.equal(members[0].opening.available,0n);
+  const established=await members[0].punish(acceptedContact.outgoing,now++,acceptedContact.recipientSignature);
+  members[0]=(await submit(7,[established],'established-punishment')).next;
+  assert.equal(members[0].opening.debt,1n);
+  const blocked=await members[0].reserve({peerIndex:2,role:0,nonce:bytes(221),group:bytes(222),contactPolicy:bytes(223),now}).catch(()=>null);
+  if(blocked)await assert.rejects(new Noir(programs.update).execute(witnessInputs(programs.update,blocked.input)));
+  now=Math.ceil((now+10)/10)*10;
+  const establishedDeposit=await anonymous(await members[0].deposit(established.delivery,members[0].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'established-deposit');
+  await call({op:'deposit',batch:[{deposit:establishedDeposit.statement.deposit,proof:establishedDeposit.proof},batch[1]],now});
+  await drain(2);assert.equal(members[2].opening.available,2n);assert.equal(members[2].opening.punished,1n);
+  members[0]=(await submit(7,[await members[0].refill(now++)],'debt-refill')).next;
+  assert.equal(members[0].opening.debt,0n);assert.equal(members[0].opening.available,0n);
+  now=Math.max(now,Number(members[0].opening.frontier)+10);
+  members[0]=(await submit(7,[await members[0].refill(now++)],'spendable-refill')).next;
+  assert.equal(members[0].opening.available,1n);
+  const declinedContact=await contact(0,3);
+  members[3]=(await submit(10,[await members[3].activate(declinedContact.incoming,now++,declinedContact.senderSignature)],'decline-activate')).next;
+  const declinedSlot=members[3].slots.get(declinedContact.incoming.toString());
+  const decline={kind:2,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
+  decline.signature=canonicalSignature(sign('sha256',receiptBytes(community,members[3].owner.member,members[0].owner.member,declinedSlot,members[3].owner.delegationDigest,decline),{key:signing[3],dsaEncoding:'ieee-p1363'}));
+  members[3]=(await submit(10,[await members[3].settle(declinedContact.incoming,decline,undefined,now++)],'decline')).next;
+  now=Math.ceil((now+10)/10)*10;
+  const declineProof=await anonymous(await members[3].deposit({slot:declinedSlot,kind:2},members[3].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'decline-deposit');
+  await call({op:'deposit',batch:[{deposit:declineProof.statement.deposit,proof:declineProof.proof},batch[1]],now});
+  await drain(0);assert.equal(members[0].opening.declined,1n);assert.equal(members[0].opening.reserved,1n);
+  await assert.rejects(members[0].cancel(declinedContact.outgoing,now));
+  const rounded=await record(0,'record-rounding');
+  assert.deepEqual(await call({op:'record',record:rounded.statement.record,proof:rounded.proof,now}),[3333,3333,3334]);
+  console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
   await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
 }finally{child.stdin.end();await hashApi.destroy();}

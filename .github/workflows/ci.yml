@@ -1,5 +1,9 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore: ['**.md']
+  pull_request:
+    paths-ignore: ['**.md']
 permissions:
   contents: read
 concurrency:
@@ -8,7 +12,7 @@ concurrency:
 jobs:
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
     steps:
@@ -22,7 +26,6 @@ jobs:
         with:
           cache-on-failure: true
       - run: rustc --version && cargo fmt --check
-      - run: cargo generate-lockfile
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:

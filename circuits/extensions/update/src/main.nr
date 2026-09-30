@@ -219,6 +219,7 @@ fn main(
                     } else {assert((slot.phase==4)|(slot.phase==5));}
                     next_slot.phase=3; next_slot.answered=true;
                 }
+                if (kind==2)&(slot.phase==1) {next_slot.phase=2;}
                 next_slot.outcome=kind;
             }
             let paid=if cost < available as u64 {cost} else {available as u64};
