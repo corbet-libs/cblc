@@ -95,6 +95,13 @@ fn main() {
                             replenish: Duration::from_secs(1),
                             maximum_keys: NonZeroUsize::new(32).unwrap(),
                         },
+                        ExtensionActivation {
+                            account: serde_json::from_value(v["activation"]["account"].clone())
+                                .unwrap(),
+                            proof: HEXLOWER
+                                .decode(v["activation"]["proof"].as_str().unwrap().as_bytes())
+                                .unwrap(),
+                        },
                     )?;
                     opened
                         .admit_checkpoint(0, serde_json::from_value(v["root"].clone()).unwrap())?;

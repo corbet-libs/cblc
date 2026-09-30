@@ -17,11 +17,6 @@ crate-type = ["rlib"]
 unsafe_code = "forbid"
 missing_docs = "warn"
 
-[features]
-default = []
-# Storage/authorization test harness only; no production extension relation ships.
-extension-issuer-harness = []
-
 [dependencies]
 cthl = { git = "https://github.com/corbet-foss/cthl", rev = "7f1a38de4285dee4b15ee8f9e82c1cb257513644" }
 cpns = { git = "https://github.com/corbet-foss/cpns", rev = "23968a9fa338791e70078c6070a6f1f3cf185ff7", default-features = false }

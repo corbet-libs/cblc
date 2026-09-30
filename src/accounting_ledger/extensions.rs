@@ -42,12 +42,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     pub fn with_extensions(
         mut self,
         policy: ExtensionPolicy,
-        verifier: impl ExtensionVerifier + 'static,
+        verifier: crate::verification::ProcessExtensionVerifier,
         limits: crate::verification::ExtensionLimits,
+        activation: crate::extensions::ExtensionActivation,
     ) -> Result<Self, Error> {
-        if !cfg!(feature = "extension-issuer-harness") {
-            return Err(Error::UnsupportedCapability);
-        }
         policy.validate()?;
         let budget = crate::verification::Budget::new(&self.trust.community_id, limits)?;
         let scope = verifier.scope();
@@ -57,6 +55,27 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         {
             return Err(Error::PolicyMismatch);
         }
+        if !activation.account.genesis
+            || activation.account.community != self.community
+            || activation.account.policy != self.policy.account
+            || activation.proof.is_empty()
+            || activation.proof.len() > self.policy.max_proof_bytes
+        {
+            return Err(Error::InvalidInput);
+        }
+        crate::accounting::statement_bytes(&activation.account)?;
+        verifier.verify(
+            &ExtensionStatement::Update {
+                policy: policy.clone(),
+                account: Box::new(activation.account),
+                update: ExtendedUpdate {
+                    previous_inbox: Inbox::default(),
+                    inbox: Inbox::default(),
+                    effect: crate::extensions::Effect::Update,
+                },
+            },
+            &activation.proof,
+        )?;
         let config =
             serde_json::to_vec(&(policy.clone(), &scope)).map_err(|_| Error::InvalidInput)?;
         let mut tx = self.connection.transaction()?;

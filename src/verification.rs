@@ -53,6 +53,7 @@ pub struct ProcessExtensionVerifier {
     updates: cvfy::ProcessVerifier,
     anonymous: cvfy::ProcessVerifier,
 }
+impl crate::extensions::sealed::Sealed for ProcessExtensionVerifier {}
 impl ProcessExtensionVerifier {
     pub fn new(
         updates: cvfy::ProcessVerifierConfig,

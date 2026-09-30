@@ -53,14 +53,17 @@ lines.on('line',line=>{const waiter=pending;pending=undefined;if(!waiter)throw n
 child.on('exit',code=>{if(pending)pending.reject(new Error(`Issuer exited ${code}`));});
 async function call(request,expected=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
   assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);publicCases.push({operation:request.op,ok:result.ok,error:result.error});return result.value;}
+let activeProver;
 async function proof(kind,input,label,measure=false){
   const selected=artifacts.artifacts(kind),witness=witnessInputs(selected.circuit,input),expected=publicInputs(selected.circuit,input);
   let chosen;
   for(const backendType of measure?['NativeUnixSocket','Wasm']:['NativeUnixSocket']){
-    const prover=await createProver({artifacts:selected,backendType});
+    if(activeProver&&(activeProver.kind!==kind||backendType!=='NativeUnixSocket')){await activeProver.prover.destroy();activeProver=undefined;}
+    const prover=activeProver?.prover??await createProver({artifacts:selected,backendType});
+    if(backendType==='NativeUnixSocket')activeProver={kind,prover};
     try{const result=await prover.prove(witness,expected);chosen??=hex(result.proof);
       if(measure){benchmarks.push({label,kind,backend:backendType,...result.timings});console.log(`Measured ${label} ${backendType}: ${JSON.stringify(result.timings)}`);}}
-    finally{await prover.destroy();}
+    finally{if(backendType!=='NativeUnixSocket')await prover.destroy();}
   }
   return chosen;
 }
@@ -69,7 +72,7 @@ let now=110;
 async function submit(member,candidates,label,measure=false,expected=true){
   const proofs=[];
   for(let i=0;i<candidates.length;i++){
-    const c=candidates[i];proofs.push({state:c.statement.nextState,inbox:toArray(c.input.inbox),proof:await proof('update',c.input,label,measure&&i===candidates.length-1)});
+    const c=candidates[i];proofs.push({state:c.statement.nextState,inbox:toArray(c.input.inbox),proof:c.preparedProof??await proof('update',c.input,label,measure&&i===candidates.length-1)});
   }
   const first=candidates[0],last=candidates.at(-1),statement={...last.statement,previousState:first.statement.previousState};
   const update={previousInbox:{root:toArray(first.input.previous_inbox)},inbox:{root:toArray(last.input.inbox)},effect:last.update?.effect??{kind:'update'}};
@@ -90,11 +93,17 @@ try{
       secretHash:hex(await hashes.secretHash(community,bytes(20+i))),issuedAt:1,expiresAt:10000,delegationDigest:hex(bytes(30+i))});
   }
   const checkpoint=await checkpointFromVerified(community,entries,hashes);
-  await call({op:'init',policy,extension,scope:artifacts.scope,root:toArray((await import('@corbet-labs/czkp/primitives')).fieldBytes(checkpoint.root))});
-  for(let i=0;i<4;i++){
-    const g=await ExtensionWitness.genesis({hashes,community,policy,extension,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++});
-    members[i]=(await submit(7+i,[g],'genesis')).next;
-  }
+  const genesis=[];
+  for(let i=0;i<4;i++)genesis.push(await ExtensionWitness.genesis({hashes,community,policy,extension,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++}));
+  genesis[0].preparedProof=await proof('update',genesis[0].input,'genesis');
+  const activation={account:genesis[0].statement,proof:encodeBundle([{state:genesis[0].statement.nextState,inbox:Array(32).fill(0),proof:genesis[0].preparedProof}])};
+  const initialize={op:'init',policy,extension,scope:artifacts.scope,root:toArray((await import('@corbet-labs/czkp/primitives')).fieldBytes(checkpoint.root)),activation};
+  const badActivation=structuredClone(initialize);
+  const forgedGenesis=genesis[0].preparedProof;
+  badActivation.activation.proof=encodeBundle([{state:genesis[0].statement.nextState,inbox:Array(32).fill(0),proof:(forgedGenesis.startsWith('00')?'01':'00')+forgedGenesis.slice(2)}]);
+  await call(badActivation,false);
+  await call(initialize);
+  for(let i=0;i<4;i++)members[i]=(await submit(7+i,[genesis[i]],'genesis')).next;
   const record=async(index,label,measure=false)=>anonymous(members[index].record({purpose:'forumListing',challenge:toArray(bytes(now%255)),expiresAt:now+90}),label,measure);
   const stale=await record(0,'record-below-quorum');
   assert.equal(await call({op:'record',record:stale.statement.record,proof:stale.proof,now}),null);
@@ -124,10 +133,13 @@ try{
   now=Math.ceil((now+extension.depositDelaySeconds)/10)*10;
   const deposits=[];
   for(const [i,b] of burns.entries())deposits.push(await anonymous(await b.member.deposit(b.delivery,b.member.certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'deposit',i===0));
+  const beforeQueueRecord=await record(0,'record-before-delivery');
+  assert.equal(await call({op:'record',record:beforeQueueRecord.statement.record,proof:beforeQueueRecord.proof,now}),null);
   const batch=deposits.map(d=>({deposit:d.statement.deposit,proof:d.proof}));
   await call({op:'deposit',batch,now});
   await call({op:'deposit',batch,now}); // Exact retry cannot append twice.
   await call({op:'record',record:stale.statement.record,proof:stale.proof,now},false);
+  await call({op:'record',record:beforeQueueRecord.statement.record,proof:beforeQueueRecord.proof,now},false);
   const omitted=await members[0].reblind(now++);
   await submit(7,[omitted],'stale-frontier',false,false);
   async function drain(index){
@@ -203,4 +215,4 @@ try{
   assert.deepEqual(await call({op:'record',record:rounded.statement.record,proof:rounded.proof,now}),[3333,3333,3334]);
   console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
   await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
-}finally{child.stdin.end();await hashApi.destroy();}
+}finally{child.stdin.end();await activeProver?.prover.destroy();await hashApi.destroy();}
