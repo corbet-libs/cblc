@@ -112,10 +112,10 @@ fn check_pending(
     extension: Option<(&Extensions, &ExtendedUpdate)>,
 ) -> Result<(), Error> {
     check_extension_config(transaction, extension.map(|(e, _)| e))?;
-    if let Some((_, update)) = extension {
-        if crate::extensions::inbox(transaction, &request.statement.owner)? != update.inbox {
-            return Err(Error::Replay);
-        }
+    if let Some((_, update)) = extension
+        && crate::extensions::inbox(transaction, &request.statement.owner)? != update.inbox
+    {
+        return Err(Error::Replay);
     }
     let statement = &request.statement;
     if request.expires_at - request.issued_at > policy.max_authorization_seconds
@@ -344,10 +344,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         verify_admission(grant, &self.trust, now)?;
         verify_device_authorization(authorization, grant, now)?;
         check_extension_config(&mut transaction, extension.map(|(e, _)| e))?;
-        if let Some((_, update)) = extension {
-            if crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox {
-                return Err(Error::Replay);
-            }
+        if let Some((_, update)) = extension
+            && crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox
+        {
+            return Err(Error::Replay);
         }
         if let Some(result) = cached(
             &mut transaction,
@@ -409,10 +409,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         // A concurrent exact request may already have committed. Recover its
         // original response before applying expiry/CAS checks to a fresh write.
         check_extension_config(&mut transaction, extension.map(|(e, _)| e))?;
-        if let Some((_, update)) = extension {
-            if crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox {
-                return Err(Error::Replay);
-            }
+        if let Some((_, update)) = extension
+            && crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox
+        {
+            return Err(Error::Replay);
         }
         if let Some(result) = cached(
             &mut transaction,

@@ -35,7 +35,7 @@ pub enum AccountServiceRequest {
     Apply {
         grant: AdmissionGrant,
         authorization: DeviceAuthorization,
-        request: AccountRequest,
+        request: Box<AccountRequest>,
     },
     Status {
         grant: AdmissionGrant,

@@ -160,7 +160,7 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
     let request = AccountServiceRequest::Apply {
         grant: f.grant(7, &f.device),
         authorization: f.authorize(7, &f.device),
-        request: genesis(&f),
+        request: Box::new(genesis(&f)),
     };
     assert!(matches!(
         service.handle(request.clone()),
@@ -197,14 +197,14 @@ fn invalid_authority_cannot_register_an_account() {
     let bad = AccountServiceRequest::Apply {
         grant: f.grant(8, &f.device),
         authorization: f.authorize(8, &f.device),
-        request: genesis(&f),
+        request: Box::new(genesis(&f)),
     };
     assert!(matches!(service.handle(bad), Err(Error::Admission)));
     service
         .handle(AccountServiceRequest::Apply {
             grant: f.grant(7, &f.device),
             authorization: f.authorize(7, &f.device),
-            request: genesis(&f),
+            request: Box::new(genesis(&f)),
         })
         .unwrap();
 }
