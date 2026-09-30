@@ -1,9 +1,10 @@
 # Security status
 
 The three extension circuits and cwlt witness implementation are shipped in source.
-The complete real-proof integration suite is under validation. This is not an
-independent audit or deployment approval. The synthetic extension verifier and
-harness feature have been removed. Activation verifies a real extended genesis
+The complete real-proof integration suite passed on 2026-09-30 at d145c4c in
+[GitHub Actions](https://github.com/corbet-libs/cblc/actions/runs/36743686840).
+This is not an independent audit or deployment approval. The synthetic extension
+verifier and harness feature have been removed. Activation verifies a real extended genesis
 probe through the configured worker before writing configuration; that probe
 does not create an account.
 
@@ -92,8 +93,10 @@ sends them through the real cvfy worker into a libSQL-backed cblc issuer. It
 exercises both burns, forced ingestion, three outcomes, debt-first refill,
 quorum/rounding and the real cpns change API. Negative cases include corrupt
 activation, forged openings/certificates, wrong owner/field, change replay, stale
-frontiers, false shares and punishment refund attempts. Legacy v2 proof and issuer
-tests remain separate. CI results determine which checks have passed.
+frontiers, false shares and punishment refund attempts. It also rejects a deposit
+nullifier computed from the public receipt marker without the owner secret.
+All these scenarios passed with real proofs; legacy v2 proof and issuer tests
+remain separate checks in the same workflow.
 
 Benchmarks select native and wasm Barretenberg explicitly on one CI runner.
 The wasm Rust planner also shares native test vectors. Node wasm results are
@@ -108,3 +111,13 @@ upstream connector source. HTTP/2 is unused and CRLs are not configured; two rem
 TLS name-constraint risks and the unmaintained parser remain open. A green
 exception-policy audit is not an advisory-free dependency graph. The optional
 Turso integration still requires externally supplied credentials.
+
+The locked graph also predates two concurrent leaf-review fixes. cthl at
+7f1a38d can scan its bounded key table on repeated full-capacity denials; upstream
+[6939c3c](https://github.com/corbet-foss/cthl/commit/6939c3c6b586bf057451f47673c261ad757ffd7e)
+adds the recovery checkpoint. crlt at 6b94dac accepts namespace-changing foreign-key
+SET DEFAULT/SET NULL actions; upstream
+[4ba0656](https://github.com/corbet-foss/crlt/commit/4ba065601b93a710aab56104ab070ab0521cf33e)
+rejects them. cblc's issuer schema does not use those foreign-key actions.
+Coordinated downstream pin adoption remains separate integration work; this
+extension implementation does not claim to repair those older leaf revisions.

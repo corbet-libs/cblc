@@ -6,7 +6,8 @@ UltraHonk (noir-recursive target), pinned upstream SHA-256/Poseidon2 and standar
 P-256 verification. Generic ABI/proof adapters are in czkp; member witnesses are
 in cwlt. No opening enters the server API.
 
-The real-proof integration suite is under validation. See
+The real-proof integration suite passed on 2026-09-30; see
+[CI](https://github.com/corbet-libs/cblc/actions/runs/36743686840) and
 [SECURITY-STATUS.md](SECURITY-STATUS.md) for precise guarantees and residual trust.
 
 ## Activation and artifacts
