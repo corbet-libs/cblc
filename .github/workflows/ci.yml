@@ -8,7 +8,9 @@ concurrency:
 jobs:
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -22,6 +24,7 @@ jobs:
           node-version: 24
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm test
+      - run: node tests/real-proof.mjs
       - run: cargo test
       - uses: actions/upload-artifact@v4
         if: always()
