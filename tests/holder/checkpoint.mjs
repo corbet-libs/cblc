@@ -1,7 +1,7 @@
 // Persistence of existing witnesses, not a new account or proof protocol.
 // Only an encrypted member wallet may store these private checkpoint bytes.
-import { hex, unhex } from '../../runtime/accounting/encoding.mjs';
-import { fieldBytes, fieldValue } from '../../runtime/accounting/primitives.mjs';
+import { hex, unhex } from '@corbet-labs/czkp/encoding';
+import { fieldBytes, fieldValue } from '@corbet-labs/czkp/primitives';
 import { IndexedMap, SparseTree, integer, policyDigest, statePolicyDigest, SAFE } from '../../runtime/accounting/hashes.mjs';
 import { checkEnrollmentShape, copyEnrollmentCheckpoint, enrollmentRoot, verifyEnrollmentLeaf, verifyEnrollmentPath } from './enrollment.mjs';
 

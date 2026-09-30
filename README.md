@@ -38,6 +38,9 @@ GitHub Actions runs fmt, clippy with warnings denied, Rust integration tests and
 JavaScript contract tests. The legacy circuits and browser experiments remain
 validation tooling, excluded from the server API. Real proof acceptance and
 storage tests have distinct evidence; historical reports are not new CI results.
+Punishment inbox enforcement, change-spend binding and relative-record checks are
+available behind a separately configured complete extension verifier. The new
+circuit/holder implementation is not shipped; see [extension requirements](docs/EXTENSIONS.md).
 See [CONTRACT](docs/CONTRACT.md) and [migration](docs/MIGRATION.md).
 
 Copyright 2026 Julian Y. Richard Corbet. [FSL-1.1-ALv2](LICENSE.md).

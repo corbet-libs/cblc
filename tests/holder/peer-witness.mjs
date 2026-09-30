@@ -1,6 +1,6 @@
 // Private witness adapter: reuse the actual account-state helper and map paths.
 // Nothing returned as `input` may enter a named request or an evidence log.
-import { fieldBytes, fieldValue, limbs32 } from '../../runtime/accounting/primitives.mjs';
+import { fieldBytes, fieldValue, limbs32 } from '@corbet-labs/czkp/primitives';
 import { SAFE } from '../../runtime/accounting/hashes.mjs';
 
 export const PEER_MODE = 'peer-reservation-v3';

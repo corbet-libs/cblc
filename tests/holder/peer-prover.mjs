@@ -1,6 +1,6 @@
 // Shared production proving step for the existing peer-reservation-v3 circuit.
 // The returned presentation belongs only on the authenticated peer channel.
-import { OPTIONS, hex } from '../../runtime/accounting/encoding.mjs';
+import { OPTIONS, hex } from '@corbet-labs/czkp/encoding';
 import { noirInput } from '../../runtime/accounting/hashes.mjs';
 import { publicInputValues } from './peer-witness.mjs';
 import { validateAcceptedContext } from './peer-verifier.mjs';

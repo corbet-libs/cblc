@@ -1,5 +1,5 @@
 import { loadArtifacts, withPinnedBrowserWasm } from './artifacts.mjs';
-import { OPTIONS, unhex } from './encoding.mjs';
+import { OPTIONS, unhex } from '@corbet-labs/czkp/encoding';
 import { accountHashes } from './hashes.mjs';
 import { validateStatement } from './statement.mjs';
 const exact = (value, keys) => value && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value,key));

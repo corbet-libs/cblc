@@ -1,5 +1,5 @@
-import { fieldValue } from './primitives.mjs';
-import { cat, be } from './encoding.mjs';
+import { fieldValue } from '@corbet-labs/czkp/primitives';
+import { cat, be } from '@corbet-labs/czkp/encoding';
 import { policyDigest, integer, SAFE, POLICY_KEYS } from './hashes.mjs';
 export const POLICY_WIRE = [
   ['initialCredit','initial_credit',32], ['maximumAvailable','maximum_available',32],

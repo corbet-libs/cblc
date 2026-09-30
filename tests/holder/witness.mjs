@@ -1,5 +1,5 @@
-import { fieldBytes, fieldValue } from '../../runtime/accounting/primitives.mjs';
-import { cat, be, random, zeros } from '../../runtime/accounting/encoding.mjs';
+import { fieldBytes, fieldValue } from '@corbet-labs/czkp/primitives';
+import { cat, be, random, zeros } from '@corbet-labs/czkp/encoding';
 import { IndexedMap, policyDigest, statePolicyDigest, integer, SAFE, POLICY_KEYS } from '../../runtime/accounting/hashes.mjs';
 import { exportWitnessCheckpoint, restoreWitnessCheckpoint } from './checkpoint.mjs';
 import { refreshEnrollment, verifyEnrollmentPath, verifyReceiptEnrollment } from './enrollment.mjs';

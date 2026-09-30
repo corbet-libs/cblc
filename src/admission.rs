@@ -1,8 +1,9 @@
 use crate::Error;
+use czkp::digest;
 pub(crate) use czkp::{MAX_INTEGER, decode, scope, signature};
 use data_encoding::BASE64URL_NOPAD;
+use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

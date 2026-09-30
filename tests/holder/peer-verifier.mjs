@@ -1,7 +1,7 @@
 // Portable browser/Node proof verifier. The host supplies a REAL pinned-operator
 // acceptance verifier; no default or successful stand-in is provided here.
-import { OPTIONS, sha } from '../../runtime/accounting/encoding.mjs';
-import { fieldValue } from '../../runtime/accounting/primitives.mjs';
+import { OPTIONS, sha } from '@corbet-labs/czkp/encoding';
+import { fieldValue } from '@corbet-labs/czkp/primitives';
 import { policyDigest, statePolicyDigest, POLICY_KEYS } from '../../runtime/accounting/hashes.mjs';
 import { publicInputValues as accountPublicInputs, validityHorizon } from './witness.mjs';
 import { EXPECTED_KEYS, bytes32, safeInteger, exact, equalBytes, publicInputValues } from './peer-witness.mjs';

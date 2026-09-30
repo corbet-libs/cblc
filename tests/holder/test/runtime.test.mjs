@@ -5,7 +5,7 @@ import { loadArtifacts, resourceLimits, withPinnedBrowserWasm } from '../../../r
 import { AccountClient, accountAcceptanceBytes, accountRequestBytes, verifyAccountAcceptance } from '../client.mjs';
 import { policyDigest } from '../../../runtime/accounting/hashes.mjs';
 import { validateStatement } from '../runtime.mjs';
-import { cat, be, sha, hex } from '../../../runtime/accounting/encoding.mjs';
+import { cat, be, sha, hex } from '@corbet-labs/czkp/encoding';
 import { statementBytes } from '../witness.mjs';
 
 const policy = {initialCredit:3,maximumAvailable:4,outgoingReservation:1,incomingReservation:1,

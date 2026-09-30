@@ -1,6 +1,6 @@
 import { checkpointFromVerified } from '../../runtime/accounting/hashes.mjs';
-import { hex } from '../../runtime/accounting/encoding.mjs';
-import { fieldBytes } from '../../runtime/accounting/primitives.mjs';
+import { hex } from '@corbet-labs/czkp/encoding';
+import { fieldBytes } from '@corbet-labs/czkp/primitives';
 import {
   ACCOUNT_HASH_SCHEME, delegationShape, publicEntry, publicationShape,
   publicationSigningBytes, sortPublicationDelegations, sameEntry,

@@ -1,4 +1,4 @@
-import { be, cat, random, sha } from '../../runtime/accounting/encoding.mjs';
+import { be, cat, random, sha } from '@corbet-labs/czkp/encoding';
 import { statementBytes } from './witness.mjs';
 import { validateStatement } from './witness.mjs';
 

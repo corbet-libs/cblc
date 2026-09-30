@@ -26,7 +26,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
+mod extensions;
 mod tuning;
+use self::extensions::check_extension_config;
+use crate::extensions::{ExtendedUpdate, ExtensionStatement, Extensions};
 pub use tuning::WaitingPeriodTuning;
 use tuning::{StoredConfig, check_config, config_bytes};
 
@@ -52,6 +55,7 @@ pub struct AccountLedger<V: AccountProofVerifier> {
     proof_scope: AccountProofScope,
     verifier: V,
     operator: SigningKey,
+    extensions: Option<Extensions>,
 }
 
 fn check_time(now: u64, floor: u64) -> Result<(), Error> {
@@ -96,6 +100,7 @@ fn cached(
 // Check mutable database predicates both before expensive verification and in
 // the final write transaction. Policy and request bytes remain immutably
 // borrowed across verification; no preflight database result authorizes commit.
+#[allow(clippy::too_many_arguments)]
 fn check_pending(
     transaction: &mut Transaction<'_>,
     request: &AccountRequest,
@@ -104,7 +109,14 @@ fn check_pending(
     authorization: &DeviceAuthorization,
     policy: &AccountLedgerPolicy,
     now: u64,
+    extension: Option<(&Extensions, &ExtendedUpdate)>,
 ) -> Result<(), Error> {
+    check_extension_config(transaction, extension.map(|(e, _)| e))?;
+    if let Some((_, update)) = extension {
+        if crate::extensions::inbox(transaction, &request.statement.owner)? != update.inbox {
+            return Err(Error::Replay);
+        }
+    }
     let statement = &request.statement;
     if request.expires_at - request.issued_at > policy.max_authorization_seconds
         || now < request.issued_at
@@ -229,6 +241,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             proof_scope,
             verifier,
             operator,
+            extensions: None,
         })
     }
 
@@ -269,11 +282,33 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         request: &AccountRequest,
         clock: impl Fn() -> u64,
     ) -> Result<AccountAcceptance, Error> {
+        self.apply_inner(grant, authorization, request, None, clock)
+    }
+
+    fn apply_inner(
+        &mut self,
+        grant: &AdmissionGrant,
+        authorization: &DeviceAuthorization,
+        request: &AccountRequest,
+        update: Option<&ExtendedUpdate>,
+        clock: impl Fn() -> u64,
+    ) -> Result<AccountAcceptance, Error> {
+        let extension = match update {
+            Some(update) => Some((
+                self.extensions
+                    .as_ref()
+                    .ok_or(Error::UnsupportedCapability)?,
+                update,
+            )),
+            None => None,
+        };
+        let expected_scope =
+            extension.map_or_else(|| self.proof_scope.clone(), |(e, _)| e.verifier.scope());
         if request.proof.len() > self.policy.max_proof_bytes {
             return Err(Error::InvalidInput);
         }
         let statement = &request.statement;
-        if statement.community != self.community || request.proof_scope != self.proof_scope {
+        if statement.community != self.community || request.proof_scope != expected_scope {
             return Err(Error::PolicyMismatch);
         }
         let before = clock();
@@ -290,7 +325,17 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             &account_request_bytes(request)?,
             &request.signature,
         )?;
-        let request_digest = account_request_digest(request)?;
+        let mut request_digest = account_request_digest(request)?;
+        if let Some((extension, update)) = extension {
+            let binding = serde_json::to_vec(&(
+                b"cblc.extended-request.v1",
+                request_digest,
+                &extension.config,
+                update,
+            ))
+            .map_err(|_| Error::InvalidInput)?;
+            request_digest = Sha256::digest(binding).into();
+        }
         let root_key = decode::<32>(&authorization.root_public_key)?;
         let operator_key = self.operator.verifying_key().to_bytes();
         let mut transaction = self.connection.transaction()?;
@@ -298,6 +343,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         check_time(now, clock_floor(&mut transaction)?.max(before))?;
         verify_admission(grant, &self.trust, now)?;
         verify_device_authorization(authorization, grant, now)?;
+        check_extension_config(&mut transaction, extension.map(|(e, _)| e))?;
+        if let Some((_, update)) = extension {
+            if crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox {
+                return Err(Error::Replay);
+            }
+        }
         if let Some(result) = cached(
             &mut transaction,
             &statement.owner,
@@ -324,11 +375,29 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             authorization,
             &self.policy,
             now,
+            extension,
         )?;
         // Release every SQLite lock before invoking an external or slow
         // verifier. Other owners and competing devices can commit meanwhile.
         transaction.rollback()?;
-        self.verifier.verify(statement, &request.proof)?;
+        if let Some((extensions, update)) = extension {
+            if matches!(update.effect, crate::extensions::Effect::Change { binding } if binding == [0;32])
+                || (!matches!(update.effect, crate::extensions::Effect::Update)
+                    && (statement.genesis || statement.settlement_marker == [0; 32]))
+            {
+                return Err(Error::InvalidInput);
+            }
+            extensions.verifier.verify(
+                &ExtensionStatement::Update {
+                    policy: extensions.policy.clone(),
+                    account: Box::new(statement.clone()),
+                    update: update.clone(),
+                },
+                &request.proof,
+            )?;
+        } else {
+            self.verifier.verify(statement, &request.proof)?;
+        }
         let mut transaction = self.connection.transaction()?;
         let completed = clock();
         check_time(completed, clock_floor(&mut transaction)?.max(now))?;
@@ -339,6 +408,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         verify_device_authorization(authorization, grant, completed)?;
         // A concurrent exact request may already have committed. Recover its
         // original response before applying expiry/CAS checks to a fresh write.
+        check_extension_config(&mut transaction, extension.map(|(e, _)| e))?;
+        if let Some((_, update)) = extension {
+            if crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox {
+                return Err(Error::Replay);
+            }
+        }
         if let Some(result) = cached(
             &mut transaction,
             &statement.owner,
@@ -365,12 +440,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             authorization,
             &self.policy,
             completed,
+            extension,
         )?;
         let mut acceptance = AccountAcceptance {
             statement: statement.clone(),
             request_id: request.request_id,
             request_digest,
-            proof_scope: self.proof_scope.clone(),
+            proof_scope: expected_scope,
             accepted_at: completed,
             signature: String::new(),
         };
@@ -395,6 +471,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 latest_request: request.request_id,
             },
         )?;
+        if let Some((_, update)) = extension {
+            transaction.put(&key(7, &[&statement.owner]), &update.inbox)?;
+        }
         // Replace the latest signed acceptance; no historical request table is retained.
         transaction.put(&key(2, &[&statement.owner]), &acceptance)?;
         advance_clock(&mut transaction, completed)?;

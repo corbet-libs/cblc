@@ -1,7 +1,7 @@
 import { sign } from 'node:crypto';
 import { checkpointFromVerified } from '../../runtime/accounting/hashes.mjs';
-import { fieldBytes } from '../../runtime/accounting/primitives.mjs';
-import { hex } from '../../runtime/accounting/encoding.mjs';
+import { fieldBytes } from '@corbet-labs/czkp/primitives';
+import { hex } from '@corbet-labs/czkp/encoding';
 import {
   ENROLLMENT_DOMAIN, publicationSigningBytes, publicationShape,
   sortPublicationDelegations,

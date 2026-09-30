@@ -36,3 +36,7 @@ No plaintext allocation ledger or holder/prover API is exported. Historical
 holder and browser harnesses are test fixtures, not deployment code. Existing
 proof artifacts do not yet support punishment, change tokens or public counters;
 extension activation must be separate from v2 acceptance.
+
+Extension issuer APIs (`with_extensions`, `apply_extended`, `deposit`,
+`obligations`, `public_record`) and their activation boundary are specified in
+[EXTENSIONS.md](EXTENSIONS.md). They are not enabled by the legacy v2 verifier.

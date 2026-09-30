@@ -1,6 +1,6 @@
 // Membership paths and historical authority use the existing account relation.
-import { hex } from '../../runtime/accounting/encoding.mjs';
-import { fieldBytes, fieldValue } from '../../runtime/accounting/primitives.mjs';
+import { hex } from '@corbet-labs/czkp/encoding';
+import { fieldBytes, fieldValue } from '@corbet-labs/czkp/primitives';
 import { integer, SAFE } from '../../runtime/accounting/hashes.mjs';
 
 const KEYS = ['member','key','secretHash','start','end','delegationDigest','index','leaf','path'];

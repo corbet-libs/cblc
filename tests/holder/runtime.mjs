@@ -1,5 +1,5 @@
 import { loadArtifacts, withPinnedBrowserWasm } from '../../runtime/accounting/artifacts.mjs';
-import { OPTIONS, hex, sha, unhex } from '../../runtime/accounting/encoding.mjs';
+import { OPTIONS, hex, sha, unhex } from '@corbet-labs/czkp/encoding';
 import { accountHashes, noirInput } from '../../runtime/accounting/hashes.mjs';
 import { publicInputValues, statementFromInput, validateStatement } from './witness.mjs';
 import { verifyAccountAcceptance } from './client.mjs';

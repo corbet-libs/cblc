@@ -1,4 +1,4 @@
-import { hex, sha } from './encoding.mjs';
+import { hex, sha } from '@corbet-labs/czkp/encoding';
 
 export const DEFAULT_LIMITS = Object.freeze({ maxArtifactBytes: 64 * 1024 * 1024,
   maxTotalBytes: 128 * 1024 * 1024, maxProofBytes: 1024 * 1024, memoryPages: 32768 });

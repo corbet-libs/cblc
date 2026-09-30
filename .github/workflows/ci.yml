@@ -20,9 +20,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm test
       - run: cargo test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dependency-lock
-          path: Cargo.lock
+          path: |
+            Cargo.lock
+            package-lock.json

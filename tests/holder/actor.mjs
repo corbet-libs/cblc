@@ -2,8 +2,8 @@ import { AccountWitness } from './witness.mjs';
 import { AccountClient, accountRequestBytes, verifyAccountAcceptance } from './client.mjs';
 import { copyEnrollmentCheckpoint, enrollmentRoot, verifyEnrollmentPath } from './enrollment.mjs';
 import { STATEMENT_KEYS } from './peer-witness.mjs';
-import { fieldBytes } from '../../runtime/accounting/primitives.mjs';
-import { hex, unhex, random, sha } from '../../runtime/accounting/encoding.mjs';
+import { fieldBytes } from '@corbet-labs/czkp/primitives';
+import { hex, unhex, random, sha } from '@corbet-labs/czkp/encoding';
 import { scopedAccountSigner } from './actor-signing.mjs';
 import { accountActorStorage } from './actor-storage.mjs';
 

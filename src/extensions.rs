@@ -1,0 +1,138 @@
+//! Proof-gated extensions. V2 circuits cannot authorize any of these statements.
+use crate::{
+    Error,
+    accounting::{AccountProofScope, AccountStatement},
+    storage::{Transaction, key},
+};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+/// Mandatory platform policy; no implicit quorum or economic defaults.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionPolicy {
+    pub revision: u64,
+    pub public_record_quorum: u32,
+    pub change_token_cost: u32,
+}
+impl ExtensionPolicy {
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.revision == 0
+            || self.revision > czkp::MAX_INTEGER
+            || self.public_record_quorum == 0
+            || self.change_token_cost == 0
+        {
+            return Err(Error::InvalidInput);
+        }
+        Ok(())
+    }
+}
+/// Settlement frontier, not a balance or an outcome counter.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Inbox {
+    pub sequence: u64,
+    pub root: [u8; 32],
+}
+/// The public effect to prove in addition to all ordinary account constraints.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum Effect {
+    /// Apply every queued obligation before any other state change.
+    Update,
+    /// Spend the configured units and bind permission to this opaque field commitment.
+    Change { binding: [u8; 32] },
+    /// Burn one's own reservation or one introduction, recording debt at zero.
+    /// The hidden relation also creates a single-use anonymous deposit authorization.
+    Punish,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtendedUpdate {
+    pub inbox: Inbox,
+    pub effect: Effect,
+}
+/// A recipient-addressed opaque obligation, delivered without the punished holder.
+/// The proof hides the reporter, receipt, conversation and kind of outcome.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Deposit {
+    pub community: [u8; 32],
+    pub recipient: [u8; 32],
+    pub nullifier: [u8; 32],
+    pub burn_nullifier: [u8; 32],
+    pub obligation: [u8; 32],
+}
+/// Relative public values only: 10,000 basis points in accepted/declined/punished order.
+/// The proof establishes the hidden total reaches the configured quorum.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PublicRecord {
+    pub community: [u8; 32],
+    pub owner: [u8; 32],
+    pub version: u64,
+    pub state: [u8; 32],
+    pub inbox: Inbox,
+    pub shares: Option<[u16; 3]>,
+}
+/// Complete, domain-separated verifier input. The backend must bind every field.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ExtensionStatement {
+    Update {
+        policy: ExtensionPolicy,
+        account: Box<AccountStatement>,
+        update: ExtendedUpdate,
+    },
+    Deposit {
+        policy: ExtensionPolicy,
+        deposit: Deposit,
+    },
+    Record {
+        policy: ExtensionPolicy,
+        record: PublicRecord,
+    },
+}
+/// Trusted backend for the COMPLETE extension relation, not a signature substitute.
+/// See docs/EXTENSIONS.md for mandatory circuit constraints. There is no default.
+pub trait ExtensionVerifier: Send {
+    fn scope(&self) -> AccountProofScope;
+    fn verify(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error>;
+}
+impl ExtensionVerifier for cvfy::ProcessVerifier {
+    fn scope(&self) -> AccountProofScope {
+        self.scope()
+    }
+    fn verify(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error> {
+        self.verify(statement, proof)
+    }
+}
+pub(crate) struct Extensions {
+    pub policy: ExtensionPolicy,
+    pub verifier: Box<dyn ExtensionVerifier>,
+    pub config: Vec<u8>,
+}
+pub(crate) fn inbox(tx: &mut Transaction<'_>, owner: &[u8; 32]) -> Result<Inbox, Error> {
+    Ok(tx.get(&key(5, &[owner]))?.unwrap_or_default())
+}
+pub(crate) fn applied(tx: &mut Transaction<'_>, owner: &[u8; 32]) -> Result<Inbox, Error> {
+    Ok(tx.get(&key(7, &[owner]))?.unwrap_or_default())
+}
+pub(crate) fn advance(previous: &Inbox, deposit: &Deposit) -> Result<Inbox, Error> {
+    let sequence = previous
+        .sequence
+        .checked_add(1)
+        .filter(|n| *n <= czkp::MAX_INTEGER)
+        .ok_or(Error::Capacity)?;
+    let mut hash = Sha256::new();
+    hash.update(b"cblc.obligation-inbox.v1\0");
+    hash.update(deposit.community);
+    hash.update(deposit.recipient);
+    hash.update(previous.root);
+    hash.update(sequence.to_be_bytes());
+    hash.update(deposit.obligation);
+    Ok(Inbox {
+        sequence,
+        root: hash.finalize().into(),
+    })
+}

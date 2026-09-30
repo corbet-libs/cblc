@@ -1,0 +1,8 @@
+{
+  "name": "cblc-validation",
+  "private": true,
+  "type": "module",
+  "workspaces": ["runtime/accounting", "experiments/private-accounting"],
+  "dependencies": { "@corbet-labs/czkp": "github:corbet-foss/czkp#22f9772" },
+  "scripts": { "test": "node --test tests/holder/test/*.test.mjs" }
+}

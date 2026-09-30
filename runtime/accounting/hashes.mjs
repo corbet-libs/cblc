@@ -1,7 +1,7 @@
 // Encoding and authenticated-map witnesses around pinned BB Poseidon2.
 // No permutation, sponge, signature or proof verifier is implemented here.
-import { be, cat, hex, unhex, sha, memberBytes } from './encoding.mjs';
-import { fieldBytes, fieldValue, limbs32, hashesFor, POSEIDON_SCHEME } from './primitives.mjs';
+import { be, cat, hex, unhex, sha, memberBytes } from '@corbet-labs/czkp/encoding';
+import { fieldBytes, fieldValue, limbs32, hashesFor, POSEIDON_SCHEME } from '@corbet-labs/czkp/primitives';
 
 export const ACCOUNT_MODE = 'account-state-v2';
 export const ACCOUNT_DOMAIN = 0x6366726d2e6163636f756e742d73746174652e7632n;

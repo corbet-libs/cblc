@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
 import { AccountClient, AccountWitness, accountAcceptanceBytes, accountRequestBytes } from '../index.mjs';
 import { accountHashes, checkpointFromVerified } from '../../../runtime/accounting/hashes.mjs';
-import { fieldBytes, FR_MODULUS } from '../../../runtime/accounting/primitives.mjs';
-import { cat, hex, sha } from '../../../runtime/accounting/encoding.mjs';
+import { fieldBytes, FR_MODULUS } from '@corbet-labs/czkp/primitives';
+import { cat, hex, sha } from '@corbet-labs/czkp/encoding';
 
 // Storage and reconstruction contracts only. This deterministic synthetic hash
 // backend is not Poseidon2 and produces no valid account proof or acceptance.

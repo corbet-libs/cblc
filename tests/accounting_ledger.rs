@@ -795,3 +795,6 @@ fn inspect(path: &Path) -> Connection {
       CREATE TEMP VIEW configuration AS SELECT CAST(value AS INTEGER) AS clock_floor FROM cssr_records WHERE community_id='community.example' AND key=x'636c6f636b';").unwrap();
     db
 }
+
+#[path = "accounting_ledger/extensions.rs"]
+mod extensions;
