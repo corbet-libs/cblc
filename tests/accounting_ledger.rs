@@ -888,3 +888,36 @@ fn default_build_rejects_extension_activation() {
     );
     assert!(matches!(result, Err(Error::UnsupportedCapability)));
 }
+
+#[test]
+fn admission_rejects_legacy_root_ids_and_mismatched_pseudonyms() {
+    let f = Fixture::new();
+    let valid = f.grant(7, &f.device);
+    cblc::admission::verify_admission(&valid, &f.trust, 120).unwrap();
+    let mut old = valid.clone();
+    old.version = 1;
+    assert_eq!(
+        cblc::admission::admission_bytes(&old),
+        Err(Error::Admission)
+    );
+    let mut rerooted = valid.clone();
+    let root = SigningKey::from_bytes(&[99; 32]);
+    rerooted.member_id = B64.encode(&Sha256::digest(
+        serde_json::to_vec(&serde_json::json!([
+            "cmsg.member.v1",
+            "community.example",
+            B64.encode(&root.verifying_key().to_bytes())
+        ]))
+        .unwrap(),
+    ));
+    assert_eq!(
+        cblc::admission::admission_bytes(&rerooted),
+        Err(Error::Admission)
+    );
+    let mut altered = valid;
+    altered.pseudonym = data_encoding::HEXLOWER.encode(&[8; 48]);
+    assert_eq!(
+        cblc::admission::admission_bytes(&altered),
+        Err(Error::Admission)
+    );
+}

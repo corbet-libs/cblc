@@ -96,3 +96,9 @@ or change authorization; there is no safe age-based pruning under this protocol.
 Only pending obligation payload rows and superseded signed acceptances are
 removed. The library does not delete physical pages, provider backups, or copies
 made by an operator. Marker retention is a permanent cost of replay prevention.
+
+Admission envelope v2 explicitly signs the canonical cpsd pseudonym bytes as
+lowercase hex and requires their SHA-256 digest to equal `memberId`. Legacy
+`cvld.admission.v1` grants are rejected. The issuer must still verify the cpsd
+presentation and community; the encoding consistency check is not BBS verification.
+No pseudonym opening, root-derived fallback, or raw gate evidence is accepted.

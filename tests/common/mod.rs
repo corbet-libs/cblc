@@ -35,11 +35,12 @@ impl Fixture {
     }
     pub fn grant(&self, member: u8, device: &SigningKey) -> AdmissionGrant {
         let mut grant = AdmissionGrant {
-            version: 1,
+            version: 2,
             issuer_key_id: BASE64URL_NOPAD
                 .encode(&Sha256::digest(self.issuer.verifying_key().to_bytes())),
             community_id: self.trust.community_id.clone(),
             member_id: member_id(member),
+            pseudonym: data_encoding::HEXLOWER.encode(&[member; 48]),
             chat_public_key: BASE64URL_NOPAD.encode(&device.verifying_key().to_bytes()),
             policy_digest: self.trust.policy_digest.clone(),
             issued_at: 100,
@@ -48,10 +49,11 @@ impl Fixture {
         };
         // Independent fixture construction: do not use the library encoder to sign.
         let bytes = serde_json::to_vec(&serde_json::json!([
-            "cvld.admission.v1",
+            "cvld.admission.v2",
             grant.issuer_key_id,
             grant.community_id,
             grant.member_id,
+            grant.pseudonym,
             grant.chat_public_key,
             grant.policy_digest,
             grant.issued_at,

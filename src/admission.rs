@@ -12,6 +12,8 @@ pub struct AdmissionGrant {
     pub issuer_key_id: String,
     pub community_id: String,
     pub member_id: String,
+    /// Canonical cpsd pseudonym bytes in lowercase hex, authenticated by the issuer.
+    pub pseudonym: String,
     pub chat_public_key: String,
     pub policy_digest: String,
     pub issued_at: u64,
@@ -28,11 +30,21 @@ pub struct AdmissionTrust {
 
 /// Existing external eligibility wire format; cfrm holds only issuer public keys.
 pub fn admission_bytes(grant: &AdmissionGrant) -> Result<Vec<u8>, Error> {
-    if grant.version != 1
+    if grant.version != 2
         || !scope(&grant.community_id)
         || grant.issued_at == 0
         || grant.issued_at >= grant.expires_at
         || grant.expires_at > MAX_INTEGER
+    {
+        return Err(Error::Admission);
+    }
+    let pseudonym: [u8; 48] = data_encoding::HEXLOWER
+        .decode(grant.pseudonym.as_bytes())
+        .map_err(|_| Error::Admission)?
+        .try_into()
+        .map_err(|_| Error::Admission)?;
+    if data_encoding::HEXLOWER.encode(&pseudonym) != grant.pseudonym
+        || member_id(&pseudonym) != grant.member_id
     {
         return Err(Error::Admission);
     }
@@ -45,10 +57,11 @@ pub fn admission_bytes(grant: &AdmissionGrant) -> Result<Vec<u8>, Error> {
         decode::<32>(value).map_err(|_| Error::Admission)?;
     }
     serde_json::to_vec(&serde_json::json!([
-        "cvld.admission.v1",
+        "cvld.admission.v2",
         grant.issuer_key_id,
         grant.community_id,
         grant.member_id,
+        grant.pseudonym,
         grant.chat_public_key,
         grant.policy_digest,
         grant.issued_at,
