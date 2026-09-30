@@ -112,9 +112,39 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         Ok(next)
     }
 
+    /// Required gate for every first contact and every forum listing. A missing
+    /// record or below-quorum claim without a proof cannot authorize either action.
+    /// The caller supplies its expected context, independently of member input.
+    pub fn check_record(
+        &mut self,
+        owner: [u8; 32],
+        expected: &crate::extensions::RecordContext,
+        record: &PublicRecord,
+        proof: &[u8],
+        clock: impl Fn() -> u64,
+    ) -> Result<Option<[u16; 3]>, Error> {
+        let now = clock();
+        check_time(now, 0)?;
+        if record.owner != owner || record.context != *expected || expected.challenge == [0; 32] {
+            return Err(Error::Admission);
+        }
+        if expected.expires_at <= now
+            || expected.expires_at > now.saturating_add(self.policy.max_authorization_seconds)
+        {
+            return Err(Error::Expired);
+        }
+        let result = self.public_record(record, proof)?;
+        let completed = clock();
+        check_time(completed, now)?;
+        if completed >= expected.expires_at {
+            return Err(Error::Expired);
+        }
+        Ok(result)
+    }
+
     /// A pure proof check against current state. It records no display/request history.
     /// Stale records and unconsumed obligations are rejected before and after verification.
-    pub fn public_record(
+    pub(crate) fn public_record(
         &mut self,
         record: &PublicRecord,
         proof: &[u8],

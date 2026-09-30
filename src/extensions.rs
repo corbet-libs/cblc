@@ -63,11 +63,27 @@ pub struct Deposit {
     pub burn_nullifier: [u8; 32],
     pub obligation: [u8; 32],
 }
+/// Every visibility/contact decision carries an action-specific, fresh record proof.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RecordUse {
+    FirstContact,
+    ForumListing,
+}
+/// A challenge supplied by the relying service for exactly one decision context.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecordContext {
+    pub purpose: RecordUse,
+    pub challenge: [u8; 32],
+    pub expires_at: u64,
+}
 /// Relative public values only: 10,000 basis points in accepted/declined/punished order.
 /// The proof establishes the hidden total reaches the configured quorum.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PublicRecord {
+    pub context: RecordContext,
     pub community: [u8; 32],
     pub owner: [u8; 32],
     pub version: u64,

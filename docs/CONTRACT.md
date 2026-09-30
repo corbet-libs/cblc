@@ -51,3 +51,11 @@ root revision. It changes authority only, preserving every accounting marker.
 Old roots lose access even to cached acceptances and status. Legacy v2 databases
 fail configuration checks; they require an explicit pseudonym migration, never an
 automatic fresh genesis.
+
+`check_record` is the required cblc gate for first contact and forum listing. It
+requires a nonempty proof for both displayed shares and below-quorum results,
+bound to owner, current version/commitment, complete consumed inbox, intended use,
+relying-service challenge and expiry. The relying service supplies the expected
+context independently of member input and uses the result immediately; the
+facade cannot enforce a call in an external cfrm implementation. No record proof
+is possible through the legacy relation. Display checks persist nothing.

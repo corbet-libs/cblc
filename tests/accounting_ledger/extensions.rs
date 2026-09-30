@@ -189,6 +189,11 @@ fn relative_record_is_bound_to_quorum_current_state_and_every_obligation() {
         )
         .unwrap();
     let mut record = PublicRecord {
+        context: RecordContext {
+            purpose: RecordUse::ForumListing,
+            challenge: [1; 32],
+            expires_at: 180,
+        },
         community: first.statement.community,
         owner: first.statement.owner,
         version: 0,
@@ -204,30 +209,47 @@ fn relative_record_is_bound_to_quorum_current_state_and_every_obligation() {
     };
     assert_eq!(
         ledger
-            .public_record(&record, &sign_record(&record))
+            .check_record(
+                record.owner,
+                &record.context,
+                &record,
+                &sign_record(&record),
+                || 130
+            )
             .unwrap(),
         None
     );
     record.shares = Some([6000, 2000, 2000]);
     let signed = sign_record(&record);
     assert_eq!(
-        ledger.public_record(&record, &signed).unwrap(),
+        ledger
+            .check_record(record.owner, &record.context, &record, &signed, || 130)
+            .unwrap(),
         record.shares
     );
     record.shares = Some([5000, 3000, 2000]);
     assert_eq!(
-        ledger.public_record(&record, &signed),
+        ledger.check_record(record.owner, &record.context, &record, &signed, || 130),
         Err(Error::Signature)
     );
     record.shares = Some([10000, 10000, 0]);
     assert_eq!(
-        ledger.public_record(&record, &sign_record(&record)),
+        ledger.check_record(
+            record.owner,
+            &record.context,
+            &record,
+            &sign_record(&record),
+            || 130
+        ),
         Err(Error::InvalidInput)
     );
     record.shares = Some([6000, 2000, 2000]);
     let token = deposit_for(&first, 70);
     ledger.deposit(&token, &deposit_proof(&token)).unwrap();
-    assert_eq!(ledger.public_record(&record, &signed), Err(Error::Replay));
+    assert_eq!(
+        ledger.check_record(record.owner, &record.context, &record, &signed, || 130),
+        Err(Error::Replay)
+    );
     let wire = serde_json::to_value(&record).unwrap();
     assert!(wire.get("counts").is_none());
     assert!(wire.get("total").is_none());
@@ -374,4 +396,86 @@ fn a_deposit_racing_verification_cannot_be_skipped_at_commit() {
             .unwrap(),
         0
     );
+}
+
+#[test]
+fn contact_and_listing_require_fresh_current_record_even_below_quorum() {
+    let f = Fixture::new();
+    let dir = tempfile::tempdir().unwrap();
+    let mut ledger = open(
+        &dir.path().join("record"),
+        &f,
+        StorageOnlyVerifier::default(),
+    )
+    .with_extensions(settings(), backend())
+    .unwrap();
+    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let update = ExtendedUpdate {
+        inbox: Inbox::default(),
+        effect: Effect::Update,
+    };
+    let first = signed_update(genesis(&f), &update, &f);
+    ledger
+        .apply_extended(
+            &f.grant(7, &f.device),
+            &f.authorize(7, &f.device),
+            &first,
+            &update,
+            || 120,
+        )
+        .unwrap();
+    for purpose in [RecordUse::FirstContact, RecordUse::ForumListing] {
+        let context = RecordContext {
+            purpose,
+            challenge: [23; 32],
+            expires_at: 180,
+        };
+        let record = PublicRecord {
+            context: context.clone(),
+            community: first.statement.community,
+            owner: first.statement.owner,
+            version: 0,
+            state: first.statement.next_state,
+            inbox: Inbox::default(),
+            shares: None,
+        };
+        let signed = proof(&ExtensionStatement::Record {
+            policy: settings(),
+            record: record.clone(),
+        });
+        assert_eq!(
+            ledger.check_record(record.owner, &context, &record, &[], || 130),
+            Err(Error::InvalidInput)
+        );
+        assert_eq!(
+            ledger.check_record(record.owner, &context, &record, &signed, || 130),
+            Ok(None)
+        );
+        assert_eq!(
+            ledger.check_record(record.owner, &context, &record, &signed, || 180),
+            Err(Error::Expired)
+        );
+        let mut other = context.clone();
+        other.challenge[0] ^= 1;
+        assert_eq!(
+            ledger.check_record(record.owner, &other, &record, &signed, || 130),
+            Err(Error::Admission)
+        );
+        other = context.clone();
+        other.purpose = if purpose == RecordUse::FirstContact {
+            RecordUse::ForumListing
+        } else {
+            RecordUse::FirstContact
+        };
+        assert_eq!(
+            ledger.check_record(record.owner, &other, &record, &signed, || 130),
+            Err(Error::Admission)
+        );
+        let mut stale = record.clone();
+        stale.version += 1;
+        assert_eq!(
+            ledger.check_record(record.owner, &context, &stale, &signed, || 130),
+            Err(Error::Replay)
+        );
+    }
 }
