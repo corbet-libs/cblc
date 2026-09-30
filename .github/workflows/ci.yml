@@ -27,6 +27,7 @@ jobs:
           node-version: 24
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm test
+      - run: node runtime/extensions/compile.mjs
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         id: proof-cache
         with:
