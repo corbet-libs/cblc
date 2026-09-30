@@ -17,15 +17,23 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - run: rustc --version && cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --locked --all-targets -- -D warnings
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm test
-      - run: node tests/real-proof.mjs
-      - run: cargo test
+      - uses: actions/cache@v4
+        id: proof-cache
+        with:
+          path: .proof-test
+          key: proofs-v1-${{ runner.os }}-${{ hashFiles('experiments/private-accounting/account-state/**', 'runtime/accounting/**', 'tests/**', 'package*.json') }}
+      - if: steps.proof-cache.outputs.cache-hit != 'true'
+        run: node tests/real-proof.mjs
+      - run: cargo test --locked
       - uses: actions/upload-artifact@v4
         if: always()
         with:

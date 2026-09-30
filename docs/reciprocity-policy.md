@@ -1,5 +1,10 @@
 # Live introductions and reciprocal capacity
 
+> Migrated from cfrm. Validation dates and reports below are historical evidence,
+> not results of this extraction. The current API and storage boundary are in
+> [CONTRACT.md](CONTRACT.md); the policy circuit remains the v2 relation.
+
+
 This policy limits first introductions. Established conversation traffic has no
 per-message operator accounting. Members may modify their clients, disconnect,
 withhold acknowledgments, coordinate with other members and use several devices.

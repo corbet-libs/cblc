@@ -5,12 +5,13 @@ import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync } fr
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { compile, createFileManager } from '@noir-lang/noir_wasm';
-import { Noir } from '@noir-lang/noir_js';
-import { Barretenberg, BackendType, UltraHonkBackend, UltraHonkVerifierBackend } from '@aztec/bb.js';
+import { Barretenberg, BackendType, UltraHonkBackend } from '@aztec/bb.js';
 import { OPTIONS, hex } from '@corbet-labs/czkp/encoding';
 import { accountHashes, checkpointFromVerified } from '../runtime/accounting/hashes.mjs';
 import { AccountWitness } from './holder/witness.mjs';
-import { proveAccountCandidate } from './holder/runtime.mjs';
+import { createProver } from '@corbet-labs/czkp/prove';
+import { noirInput } from '../runtime/accounting/hashes.mjs';
+import { publicInputValues } from '../runtime/accounting/statement.mjs';
 import { createAccountVerifier } from '../runtime/accounting/runtime.mjs';
 import { nodeArtifactOptions } from '../runtime/accounting/node-verifier.mjs';
 
@@ -34,9 +35,10 @@ for(const spec of lock.files) {
 }
 const api=await Barretenberg.new({backend:BackendType.Wasm,threads:1,skipSrsInit:true,memory:{initial:2048,maximum:32768}});
 const records=[];
+let candidates, artifacts, scope;
 try {
   await api.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2Point:setup['g2.dat']});
-  const backend=new UltraHonkBackend(compiled.program.bytecode,api),verifier=new UltraHonkVerifierBackend(api);
+  const backend=new UltraHonkBackend(compiled.program.bytecode,api);
   const verificationKey=await backend.getVerificationKey(OPTIONS);
   await writeFile(resolve(directory,'vk.bin'),verificationKey);
   const manifest={version:1,compiler:'1.0.0-beta.26',backend:'5.0.0',verifierTarget:OPTIONS.verifierTarget,
@@ -45,7 +47,7 @@ try {
   const manifestBytes=Buffer.from(JSON.stringify(manifest));
   await writeFile(resolve(directory,'manifest.json'),manifestBytes);
   await writeFile(resolve(directory,'config.json'),JSON.stringify({directory,manifestSha256:digest(manifestBytes)}));
-  const scope={circuitDigest:Array.from(Buffer.from(manifest.circuitSha256,'hex')),verifyingKeyDigest:Array.from(Buffer.from(manifest.vkSha256,'hex'))};
+  scope={circuitDigest:Array.from(Buffer.from(manifest.circuitSha256,'hex')),verifyingKeyDigest:Array.from(Buffer.from(manifest.vkSha256,'hex'))};
   const community=new Uint8Array(createHash('sha256').update('community.example').digest());
   const hashes=accountHashes(api),entries=[];
   for(let index=0;index<2;index++) {
@@ -62,12 +64,16 @@ try {
   const checkpoint=await checkpointFromVerified(community,entries,hashes);
   const genesis=await AccountWitness.genesis({hashes,community,policy,checkpoint,ownerIndex:0,ownerSecret:bytes(10),now:110});
   const reserve=await genesis.next.reserve({peerIndex:1,role:0,nonce:bytes(50),group:bytes(51),contactPolicy:bytes(52),now:120});
-  const noir=new Noir(compiled.program);
-  for(const candidate of [genesis,reserve]) {
-    const result=await proveAccountCandidate({noir,backend,verifier,verificationKey,candidate,scope,maxProofBytes:1024*1024});
-    records.push(result.record);
-  }
+  candidates=[genesis,reserve];
+  artifacts={circuit:compiled.program,verificationKey,manifest,setup,limits:{memoryPages:32768,maxProofBytes:1024*1024}};
 } finally {await api.destroy();}
+const prover=await createProver({artifacts});
+try {
+  for(const candidate of candidates) {
+    const result=await prover.prove(noirInput(candidate.input),publicInputValues(candidate.statement));
+    records.push({statement:candidate.statement,proof:hex(result.proof),proofScope:scope});
+  }
+} finally {await prover.destroy();}
 // Verify with the shipped server entry, independently of holder proof construction.
 const server=await createAccountVerifier(await nodeArtifactOptions(resolve(directory,'config.json')));
 try {

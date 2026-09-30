@@ -1,5 +1,10 @@
 # Browser account proof cost
 
+> Migrated from cfrm. Validation dates and reports below are historical evidence,
+> not results of this extraction. The current API and storage boundary are in
+> [CONTRACT.md](CONTRACT.md); the policy circuit remains the v2 relation.
+
+
 The [account-state evidence](../experiments/private-accounting/account-state/README.md)
 records real browser proofs and Rust ledger concurrency/retry. Account proofs
 take roughly 28 seconds and sampled Chromium memory exceeds 1 GiB on the

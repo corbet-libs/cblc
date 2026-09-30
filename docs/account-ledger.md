@@ -1,5 +1,10 @@
 # Durable private account ledger
 
+> Migrated from cfrm. Validation dates and reports below are historical evidence,
+> not results of this extraction. The current API and storage boundary are in
+> [CONTRACT.md](CONTRACT.md); the policy circuit remains the v2 relation.
+
+
 The experimental [Rust ledger](../src/accounting_ledger.rs) accepts one opaque
 state per permanent member and atomically records each verified successor.
 It stores no peer, conversation tuple, private receipt, balance or map opening.

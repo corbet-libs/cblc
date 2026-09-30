@@ -1,5 +1,10 @@
 # Private reciprocal accounting: backend decision review
 
+> Migrated from cfrm. Validation dates and reports below are historical evidence,
+> not results of this extraction. The current API and storage boundary are in
+> [CONTRACT.md](CONTRACT.md); the policy circuit remains the v2 relation.
+
+
 **2026-09-15 — historical backend review and measurements; not an audit.**
 Inspected cfrm `2c4fa47` and the current cmsg identity, receipt and directional
 Inbox work for the initial review. The later isolated spike was executed on Crow;
