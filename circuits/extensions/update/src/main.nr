@@ -283,6 +283,8 @@ fn main(
                 assert(event == field(settlement_marker));
             }
         }
+        let refunded_debt=if debt<available as u64 {debt} else {available as u64};
+        available=available-refunded_debt as u32; debt=debt-refunded_debt; burned=burned+refunded_debt;
         assert(available as u128 + reserved <= capacity as u128);
         assert(available as u128 + reserved + burned as u128 == old.available as u128 + old.reserved + issued as u128);
         assert((debt<=SAFE)&(accepted<=SAFE)&(declined<=SAFE)&(punished<=SAFE));

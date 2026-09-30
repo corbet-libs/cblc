@@ -10,38 +10,38 @@ global LEGACY_DOMAIN: Field = 0x6366726d2e6163636f756e74696e672e706f736569646f6e
 global SAFE: u64 = 9007199254740991;
 
 pub struct Enrollment {
-    key: [u8; 64], secret_hash: [u8; 32], start: u64, end: u64,
-    delegation_digest: [u8; 32], path: [Field; 32], index: u32,
+    pub key: [u8; 64], pub secret_hash: [u8; 32], pub start: u64, pub end: u64,
+    pub delegation_digest: [u8; 32], pub path: [Field; 32], pub index: u32,
 }
 
 pub struct Opening {
-    available: u32, reserved: u128, debt: u64,
-    accepted: u64, declined: u64, punished: u64, inbox: [u8; 32], authorization: Field,
-    outgoing_root: Field, outgoing_count: u64,
-    incoming_root: Field, incoming_count: u64,
-    pair_root: Field, pair_count: u64,
-    frontier: u64, created_at: u64, admission_epoch: u64, admissions: u32, blind: [u8; 32],
+    pub available: u32, pub reserved: u128, pub debt: u64,
+    pub accepted: u64, pub declined: u64, pub punished: u64, pub inbox: [u8; 32], pub authorization: Field,
+    pub outgoing_root: Field, pub outgoing_count: u64,
+    pub incoming_root: Field, pub incoming_count: u64,
+    pub pair_root: Field, pub pair_count: u64,
+    pub frontier: u64, pub created_at: u64, pub admission_epoch: u64, pub admissions: u32, pub blind: [u8; 32],
 }
 
 pub struct Obligation {
-    role: u8, peer: [u8; 32], nonce: [u8; 32], group: [u8; 32],
-    contact_policy: [u8; 32], amount: u32, phase: u8, outcome: u8,
-    admitted_at: u64, expires_at: u64, peer_authority: Field, owner_authority: Field,
+    pub role: u8, pub peer: [u8; 32], pub nonce: [u8; 32], pub group: [u8; 32],
+    pub contact_policy: [u8; 32], pub amount: u32, pub phase: u8, pub outcome: u8,
+    pub admitted_at: u64, pub expires_at: u64, pub peer_authority: Field, pub owner_authority: Field,
 }
 
 pub struct MapWitness {
-    leaf: [Field; 4], index: u32, path: [Field; 32], append_path: [Field; 32],
+    pub leaf: [Field; 4], pub index: u32, pub path: [Field; 32], pub append_path: [Field; 32],
 }
 
 pub struct Resolution {
-    kind: u8, issued_at: u64, history_digest: [u8; 32],
-    ed25519_receipt_digest: [u8; 32], signature: [u8; 64],
+    pub kind: u8, pub issued_at: u64, pub history_digest: [u8; 32],
+    pub ed25519_receipt_digest: [u8; 32], pub signature: [u8; 64],
 }
 
-pub struct Acknowledgment { issued_at: u64, signature: [u8; 64] }
+pub struct Acknowledgment { pub issued_at: u64, pub signature: [u8; 64] }
 
 pub struct ExtensionPolicy {
-    revision: u64, quorum: u32, change_cost: u32, delay: u64, batch: u8,
+    pub revision: u64, pub quorum: u32, pub change_cost: u32, pub delay: u64, pub batch: u8,
 }
 
 pub fn extension_hash(p: ExtensionPolicy) -> Field {
