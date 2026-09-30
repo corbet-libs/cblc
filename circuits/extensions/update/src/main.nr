@@ -190,26 +190,32 @@ fn main(
                 assert(inbox==advance(community,owner,previous_inbox,obligation));
                 assert(settlement_marker==[0;32]);
                 assert((kind==4)|(slot.role==0));
-                if kind==3 {assert(slot.outcome==0);}
-                else if kind!=4 {assert((slot.outcome==0)|(slot.outcome==kind));}
-                else {assert(slot.answered & (slot.outcome==1));}
+                // Certified established punishment may arrive before the Answer
+                // deposit. Punishment is terminal even when that older delivery
+                // follows it; the target must never need to reorder the chain.
+                if (kind==3)|(kind==4) {assert(slot.outcome!=3);}
+                else {assert((slot.outcome==0)|(slot.outcome==kind)|(slot.outcome==3));}
                 if ((kind==1)|(kind==2)) & (slot.outcome==0) {
                     if kind==1 {accepted=accepted+1;} else {declined=declined+1;}
                 } else if (kind==3)|(kind==4) {
                     // An established outcome replaces the earlier accepted sent
                     // contact; receiving-side punishment adds one punitive outcome.
-                    if (kind==4)&(slot.role==0) {accepted=accepted-1;}
+                    if (slot.role==0)&(slot.outcome==1) {accepted=accepted-1;}
+                    if (slot.role==0)&(slot.outcome==2) {declined=declined-1;}
                     punished=punished+1;
                 }
             }
             if (kind==3)|(kind==4) {
                 if (slot.phase==1)|(slot.phase==2) {
                     reserved=reserved-slot.amount as u128;
-                    burned=slot.amount as u64;
+                    if kind==4 {
+                        available=available+slot.amount; cost=1;
+                    } else {burned=slot.amount as u64;}
                 } else {cost=if kind==4 {1} else {slot.amount as u64};}
                 next_slot.phase=7;
+                if kind==4 {next_slot.answered=true;}
                 if !self_punish {next_slot.outcome=3;}
-            } else {
+            } else if slot.outcome!=3 {
                 // Accepted outcomes release the bond once. Declines retain the
                 // sender's wait. Expired reservations were already refunded.
                 if (kind==1)&(slot.outcome==0) {

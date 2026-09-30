@@ -65,6 +65,7 @@ async function proof(kind,input,label,measure=false){
       if(measure){benchmarks.push({label,kind,backend:backendType,...result.timings});console.log(`Measured ${label} ${backendType}: ${JSON.stringify(result.timings)}`);}}
     finally{if(backendType!=='NativeUnixSocket')await prover.destroy();}
   }
+  console.log(`Generated and verified ${label}`);
   return chosen;
 }
 const encodeBundle=proofs=>Buffer.from(JSON.stringify({version:1,proofs})).toString('hex');
@@ -213,6 +214,27 @@ try{
   await assert.rejects(members[0].cancel(declinedContact.outgoing,now));
   const rounded=await record(0,'record-rounding');
   assert.deepEqual(await call({op:'record',record:rounded.statement.record,proof:rounded.proof,now}),[3333,3333,3334]);
+  // Anonymous transport can deliver established punishment before the Answer.
+  // Both deposits must remain consumable in that order without a late refund.
+  const reordered=await contact(2,1);
+  members[1]=(await submit(8,[await members[1].activate(reordered.incoming,now++,reordered.senderSignature)],'reordered-activate')).next;
+  const delayedSlot=members[1].slots.get(reordered.incoming.toString());
+  const delayedAnswer={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
+  const delayedBytes=receiptBytes(community,members[1].owner.member,members[2].owner.member,delayedSlot,members[1].owner.delegationDigest,delayedAnswer);
+  delayedAnswer.signature=canonicalSignature(sign('sha256',delayedBytes,{key:signing[1],dsaEncoding:'ieee-p1363'}));
+  const delayedDigest=await receiptDigest(delayedBytes,delayedAnswer.signature);
+  const delayedAck={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[2].owner.member,members[1].owner.member,delayedSlot,delayedDigest,members[2].owner.delegationDigest,now),{key:signing[2],dsaEncoding:'ieee-p1363'}))};
+  const answered=(await submit(8,[await members[1].settle(reordered.incoming,delayedAnswer,delayedAck,now++)],'reordered-answer')).next;
+  const early=await answered.punish(reordered.incoming,now++,reordered.senderSignature);
+  members[1]=(await submit(8,[early],'reordered-punishment')).next;
+  now=Math.ceil((now+10)/10)*10;
+  const earlyProof=await anonymous(await members[1].deposit(early.delivery,members[1].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'early-punishment-deposit');
+  const lateProof=await anonymous(await answered.deposit({slot:delayedSlot,kind:1},answered.certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'late-answer-deposit');
+  await call({op:'deposit',batch:[earlyProof,lateProof].map(d=>({deposit:d.statement.deposit,proof:d.proof})),now});
+  await drain(2);
+  assert.equal(members[2].opening.available,1n);assert.equal(members[2].opening.reserved,0n);
+  assert.equal(members[2].opening.accepted,0n);assert.equal(members[2].opening.punished,2n);
+  await assert.rejects(members[2].expire(reordered.outgoing,now));
   console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
   await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
 }finally{child.stdin.end();await activeProver?.prover.destroy();await hashApi.destroy();}
