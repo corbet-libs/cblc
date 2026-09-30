@@ -84,3 +84,10 @@ pinned scope/policy, exact binding, community and `SHA-256(pseudonym)` account
 owner. cpns then atomically checks and replaces the old pin revision. Failed pin
 CAS cannot undo the already completed spend; exact retries cannot change another
 field/member/revision. Raw values and salts never enter this API.
+
+Settlement, deposit and authorization replay markers are retained for the lifetime
+of the pseudonym account. Removing them could revive a previously accepted burn
+or change authorization; there is no safe age-based pruning under this protocol.
+Only pending obligation payload rows and superseded signed acceptances are
+removed. The library does not delete physical pages, provider backups, or copies
+made by an operator. Marker retention is a permanent cost of replay prevention.

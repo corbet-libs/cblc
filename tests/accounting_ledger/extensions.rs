@@ -746,7 +746,35 @@ fn cpns_consumes_only_the_exact_members_completed_spend() {
         scope: backend().scope(),
         policy: settings(),
     };
+    let other_change = Change {
+        member: &other_member,
+        ..change
+    };
+    let other_update = ExtendedUpdate {
+        effect: Effect::Change {
+            binding: change_binding(&other_change).unwrap(),
+        },
+        ..token.update.clone()
+    };
+    let mut other_request = successor(&token.request, &f, 12);
+    other_request.statement.settlement_marker = fr(16);
+    let other_request = signed_update(other_request, &other_update, &f);
+    let other_acceptance = ledger
+        .apply_extended(&g, &a, &other_request, &other_update, || 130)
+        .unwrap();
+    let wrong_owner_token = SpentChange {
+        acceptance: other_acceptance,
+        request: other_request,
+        update: other_update,
+    };
     futures::executor::block_on(async {
+        // Every binding/signature is valid, but another account paid for this member.
+        assert!(
+            verifier
+                .verify_spent(&other_change, &wrong_owner_token)
+                .await
+                .is_err()
+        );
         assert!(verifier.verify_spent(&change, &token).await.is_ok());
         for changed in [
             Change {
