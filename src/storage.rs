@@ -24,6 +24,9 @@ impl Transaction<'_> {
         let bytes = serde_json::to_vec(value).map_err(|_| Error::Storage)?;
         self.0.put(key, &bytes).map_err(|_| Error::Storage)
     }
+    pub fn delete(&mut self, key: &[u8]) -> Result<(), Error> {
+        self.0.delete(key).map_err(|_| Error::Storage)
+    }
     pub fn commit(self) -> Result<(), Error> {
         self.0.commit().map_err(|_| Error::Storage)
     }

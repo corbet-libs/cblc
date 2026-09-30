@@ -12,11 +12,11 @@ witness implementation remain required before production activation.
 - `apply_extended` authenticates the same root/device and current checkpoint as
   v2, but invokes the configured complete extension relation instead of the v2
   relation. Its signed acceptance binds policy, exact update and proof scope.
-- `deposit` accepts a proof-authorized opaque obligation addressed to one account,
+- `deposit_batch` accepts a proof-authorized opaque obligation addressed to one account,
   without requiring that account's participation. It stores a rolling commitment,
-  a sequence frontier, indexed obligation commitments and replay markers, never
+  an opaque hash frontier, indexed obligation commitments and replay markers, never
   receipts, reporters, peers or outcome counts. An exact retry does not append.
-- Deposit nullifiers and burn nullifiers prevent replay and reusing a single burn
+- Deposit nullifiers and authorization nullifiers prevent replay and reusing a single burn
   for multiple punishments. They must be unlinkable to the punisher's named update.
 - Every subsequent update must prove consumption of the current complete inbox;
   the issuer rechecks it after verification within the commit transaction. V2
@@ -33,7 +33,9 @@ witness implementation remain required before production activation.
 
 All these operations run through the same AccountStorage/issuer transaction.
 Public record proofs and deposit proofs have disjoint domain-tagged statements.
-The obligation sequence is settlement metadata, not a published outcome count.
+There is no lifetime sequence on the wire or in storage. Consumed obligation rows
+are deleted in the same transaction as the new state. At most 64 pending entries
+are admitted per account; only the temporary queue length is retained.
 Account IDs are opaque community-scoped owners, never global holder identities.
 
 ## Mandatory constraints of a production extension verifier
@@ -44,8 +46,9 @@ policy, integer, map-preservation and commitment constraints, plus:
 1. Open and process every issuer obligation from the previously applied frontier
    through the complete supplied inbox. Neither skipping an entry nor presenting
    an old frontier may preserve a spendable balance or a favorable public record.
-   Bind the SHA-256 inbox chain to community, recipient, sequence and commitment
-   exactly as `extensions::advance` encodes it. Outcome kind remains hidden.
+   Bind the SHA-256 inbox chain to community, recipient, previous root and commitment
+   exactly as `extensions::advance` v2 encodes it. Both the previously consumed
+   root and complete new root are public inputs. Outcome kind remains hidden.
 2. A punishment deposit proves an authorized recipient receipt for an actual
    contact and a unique, previously accepted self-burn. Prove possession of the
    hidden burn authorization and bind the target; random nullifiers are invalid.
@@ -79,3 +82,22 @@ Do not interpret their success as a production-ready punishment proof system.
 `extended_request_digest` specifies the canonical retry/effect binding.
 `verify_extended_acceptance` verifies the returned signature against the exact
 request, effect and extension policy before another server component consumes it.
+
+
+## Settlement transport privacy
+
+`Effect::Update` covers ordinary settlement and punishment alike. There is no
+public `Punish` tag. Every outcome uses the same `Deposit` envelope and replay
+markers; `deposit_batch` returns no recipient frontier. Release epochs must have
+arrived, batches contain at least the configured minimum (two or more), and the
+complete deposit relation must prove an accepted authorization at least one
+configured delay before the release horizon. No single-deposit endpoint exists.
+The verifier must also establish that the recipient knows the obligation opening
+material from the authenticated contact, without their participation at delivery.
+
+Batching alone does not defeat a global traffic observer. The embedding must mix
+client submissions through a relay, including ordinary outcomes; direct identifiable
+submissions still reveal network metadata. The operator necessarily learns the
+recipient of each delivered opaque settlement, but neither an outcome tag nor a
+lifetime punishment count. Snapshots/backups and an operator who records traffic
+are outside row-deletion guarantees.

@@ -27,6 +27,8 @@ fn settings() -> ExtensionPolicy {
         revision: 1,
         public_record_quorum: 5,
         change_token_cost: 1,
+        deposit_delay_seconds: 10,
+        minimum_deposit_batch: 2,
     }
 }
 fn proof(statement: &ExtensionStatement) -> Vec<u8> {
@@ -52,10 +54,11 @@ fn signed_update(
 }
 fn deposit_for(request: &AccountRequest, id: u8) -> Deposit {
     Deposit {
+        release_epoch: 10,
         community: request.statement.community,
         recipient: request.statement.owner,
         nullifier: [id; 32],
-        burn_nullifier: [id + 1; 32],
+        authorization_nullifier: [id + 1; 32],
         obligation: [id + 2; 32],
     }
 }
@@ -64,6 +67,23 @@ fn deposit_proof(value: &Deposit) -> Vec<u8> {
         policy: settings(),
         deposit: value.clone(),
     })
+}
+
+fn batch(value: &Deposit, proof: Vec<u8>) -> Vec<(Deposit, Vec<u8>)> {
+    let mut cover = value.clone();
+    cover.nullifier[0] ^= 128;
+    cover.authorization_nullifier[0] ^= 128;
+    cover.obligation[0] ^= 128;
+    let cover_proof = deposit_proof(&cover);
+    vec![(value.clone(), proof), (cover, cover_proof)]
+}
+fn deliver<V: AccountProofVerifier>(
+    ledger: &mut AccountLedger<V>,
+    value: &Deposit,
+    proof: Vec<u8>,
+) -> Result<Inbox, Error> {
+    ledger.deposit_batch(&batch(value, proof), || 130)?;
+    Ok(ledger.obligations(value.recipient)?.0)
 }
 
 #[test]
@@ -76,6 +96,7 @@ fn punishment_cannot_be_ignored_replayed_or_reset_after_restart() {
         .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let mut update = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
         inbox: Inbox::default(),
         effect: Effect::Update,
     };
@@ -90,22 +111,22 @@ fn punishment_cannot_be_ignored_replayed_or_reset_after_restart() {
         )
         .unwrap();
     let token = deposit_for(&first, 60);
-    let inbox = ledger.deposit(&token, &deposit_proof(&token)).unwrap();
+    let inbox = deliver(&mut ledger, &token, deposit_proof(&token)).unwrap();
     assert_eq!(
-        ledger.deposit(&token, &deposit_proof(&token)).unwrap(),
+        deliver(&mut ledger, &token, deposit_proof(&token)).unwrap(),
         inbox
     );
     let mut reused = token.clone();
     reused.nullifier = [80; 32];
     assert_eq!(
-        ledger.deposit(&reused, &deposit_proof(&reused)),
+        deliver(&mut ledger, &reused, deposit_proof(&reused)),
         Err(Error::Replay)
     );
     let mut tampered = token.clone();
     tampered.obligation = [81; 32];
     assert_eq!(
-        ledger.deposit(&tampered, &deposit_proof(&token)),
-        Err(Error::Signature)
+        deliver(&mut ledger, &tampered, deposit_proof(&token)),
+        Err(Error::Replay)
     );
     drop(ledger);
     let mut ledger = open(&path, &f, StorageOnlyVerifier::default())
@@ -133,10 +154,10 @@ fn punishment_cannot_be_ignored_replayed_or_reset_after_restart() {
         ),
         Err(Error::UnsupportedCapability)
     );
-    assert_eq!(
-        ledger.obligations(first.statement.owner, 0, 1).unwrap(),
-        (inbox.clone(), vec![token.obligation])
-    );
+    let (pending_root, pending) = ledger.obligations(first.statement.owner).unwrap();
+    assert_eq!(pending_root, inbox);
+    assert_eq!(pending.len(), 2);
+    assert_eq!(pending[0].commitment, token.obligation);
     update.inbox = inbox;
     let next = signed_update(successor(&first, &f, 12), &update, &f);
     ledger
@@ -175,6 +196,7 @@ fn relative_record_is_bound_to_quorum_current_state_and_every_obligation() {
     .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let update = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
         inbox: Inbox::default(),
         effect: Effect::Update,
     };
@@ -245,7 +267,7 @@ fn relative_record_is_bound_to_quorum_current_state_and_every_obligation() {
     );
     record.shares = Some([6000, 2000, 2000]);
     let token = deposit_for(&first, 70);
-    ledger.deposit(&token, &deposit_proof(&token)).unwrap();
+    deliver(&mut ledger, &token, deposit_proof(&token)).unwrap();
     assert_eq!(
         ledger.check_record(record.owner, &record.context, &record, &signed, || 130),
         Err(Error::Replay)
@@ -273,6 +295,7 @@ fn change_token_is_a_bound_single_successor_spend() {
         .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let initial = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
         inbox: Inbox::default(),
         effect: Effect::Update,
     };
@@ -287,6 +310,7 @@ fn change_token_is_a_bound_single_successor_spend() {
         )
         .unwrap();
     let change = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
         inbox: Inbox::default(),
         effect: Effect::Change { binding: [90; 32] },
     };
@@ -360,6 +384,7 @@ fn a_deposit_racing_verification_cannot_be_skipped_at_commit() {
         .unwrap();
     fast.admit_checkpoint(0, fr(8)).unwrap();
     let update = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
         inbox: Inbox::default(),
         effect: Effect::Update,
     };
@@ -384,9 +409,9 @@ fn a_deposit_racing_verification_cannot_be_skipped_at_commit() {
         let worker = scope.spawn(|| slow.apply_extended(&g, &a, &next, &update, || 130));
         observed.recv_timeout(Duration::from_secs(10)).unwrap();
         let token = deposit_for(&first, 60);
-        let deposited = fast.deposit(&token, &deposit_proof(&token));
+        let deposited = deliver(&mut fast, &token, deposit_proof(&token));
         resume.send(()).unwrap();
-        assert_eq!(deposited.unwrap().sequence, 1);
+        assert_ne!(deposited.unwrap().root, [0; 32]);
         assert_eq!(worker.join().unwrap(), Err(Error::Replay));
     });
     assert_eq!(
@@ -411,6 +436,7 @@ fn contact_and_listing_require_fresh_current_record_even_below_quorum() {
     .unwrap();
     ledger.admit_checkpoint(0, fr(8)).unwrap();
     let update = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
         inbox: Inbox::default(),
         effect: Effect::Update,
     };
@@ -478,4 +504,91 @@ fn contact_and_listing_require_fresh_current_record_even_below_quorum() {
             Err(Error::Replay)
         );
     }
+}
+
+#[test]
+fn settlement_wire_has_no_punishment_tag_or_lifetime_count_and_consumption_deletes_rows() {
+    assert!(serde_json::from_str::<Effect>(r#"{"kind":"punish"}"#).is_err());
+    assert!(
+        serde_json::to_value(Inbox::default())
+            .unwrap()
+            .get("sequence")
+            .is_none()
+    );
+    let f = Fixture::new();
+    let store = cblc::storage::MemoryStore::default();
+    let mut inspect = store.clone();
+    let mut ledger = AccountLedger::with_store(
+        store,
+        f.trust.clone(),
+        policy(),
+        StorageOnlyVerifier::default(),
+        SigningKey::from_bytes(&[9; 32]),
+    )
+    .unwrap()
+    .with_extensions(settings(), backend())
+    .unwrap();
+    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let mut update = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
+        inbox: Inbox::default(),
+        effect: Effect::Update,
+    };
+    let first = signed_update(genesis(&f), &update, &f);
+    let g = f.grant(7, &f.device);
+    let a = f.authorize(7, &f.device);
+    let accepted = ledger
+        .apply_extended(&g, &a, &first, &update, || 120)
+        .unwrap();
+    let token = deposit_for(&first, 60);
+    assert_eq!(
+        ledger.deposit_batch(&[(token.clone(), deposit_proof(&token))], || 130),
+        Err(Error::InvalidInput)
+    );
+    let mut early = token.clone();
+    early.release_epoch = 14;
+    assert_eq!(
+        ledger.deposit_batch(&batch(&early, deposit_proof(&early)), || 130),
+        Err(Error::InvalidInput)
+    );
+    update.inbox = deliver(&mut ledger, &token, deposit_proof(&token)).unwrap();
+    // A later delivery does not invalidate exact recovery of the prior acceptance.
+    let initial = ExtendedUpdate {
+        previous_inbox: Inbox::default(),
+        inbox: Inbox::default(),
+        effect: Effect::Update,
+    };
+    assert_eq!(
+        ledger
+            .apply_extended(&g, &a, &first, &initial, || 130)
+            .unwrap(),
+        accepted
+    );
+    let next = signed_update(successor(&first, &f, 11), &update, &f);
+    ledger
+        .apply_extended(&g, &a, &next, &update, || 130)
+        .unwrap();
+    assert!(
+        ledger
+            .obligations(first.statement.owner)
+            .unwrap()
+            .1
+            .is_empty()
+    );
+    use cblc::storage::AccountStorage;
+    let mut key = vec![6];
+    for part in [first.statement.owner, update.inbox.root] {
+        key.extend_from_slice(&32u64.to_be_bytes());
+        key.extend_from_slice(&part);
+    }
+    let mut tx = inspect.transaction().unwrap();
+    assert!(tx.get::<PendingObligation>(&key).unwrap().is_none());
+    tx.rollback().unwrap();
+    let mut stale = update.clone();
+    stale.previous_inbox = Inbox::default();
+    let request = signed_update(successor(&next, &f, 12), &stale, &f);
+    assert_eq!(
+        ledger.apply_extended(&g, &a, &request, &stale, || 130),
+        Err(Error::Replay)
+    );
 }

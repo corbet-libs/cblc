@@ -14,6 +14,8 @@ pub struct ExtensionPolicy {
     pub revision: u64,
     pub public_record_quorum: u32,
     pub change_token_cost: u32,
+    pub deposit_delay_seconds: u64,
+    pub minimum_deposit_batch: u8,
 }
 impl ExtensionPolicy {
     pub fn validate(&self) -> Result<(), Error> {
@@ -21,6 +23,9 @@ impl ExtensionPolicy {
             || self.revision > czkp::MAX_INTEGER
             || self.public_record_quorum == 0
             || self.change_token_cost == 0
+            || self.deposit_delay_seconds == 0
+            || self.deposit_delay_seconds > czkp::MAX_INTEGER
+            || !(2..=64).contains(&self.minimum_deposit_batch)
         {
             return Err(Error::InvalidInput);
         }
@@ -31,8 +36,14 @@ impl ExtensionPolicy {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Inbox {
-    pub sequence: u64,
     pub root: [u8; 32],
+}
+/// Pending opaque entry, removed atomically when its recipient consumes it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PendingObligation {
+    pub previous: Inbox,
+    pub commitment: [u8; 32],
 }
 /// The public effect to prove in addition to all ordinary account constraints.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,13 +53,11 @@ pub enum Effect {
     Update,
     /// Spend the configured units and bind permission to this opaque field commitment.
     Change { binding: [u8; 32] },
-    /// Burn one's own reservation or one introduction, recording debt at zero.
-    /// The hidden relation also creates a single-use anonymous deposit authorization.
-    Punish,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtendedUpdate {
+    pub previous_inbox: Inbox,
     pub inbox: Inbox,
     pub effect: Effect,
 }
@@ -57,10 +66,12 @@ pub struct ExtendedUpdate {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Deposit {
+    /// Coarse release horizon. The circuit proves acceptance preceded it by the configured delay.
+    pub release_epoch: u64,
     pub community: [u8; 32],
     pub recipient: [u8; 32],
     pub nullifier: [u8; 32],
-    pub burn_nullifier: [u8; 32],
+    pub authorization_nullifier: [u8; 32],
     pub obligation: [u8; 32],
 }
 /// Every visibility/contact decision carries an action-specific, fresh record proof.
@@ -135,20 +146,13 @@ pub(crate) fn applied(tx: &mut Transaction<'_>, owner: &[u8; 32]) -> Result<Inbo
     Ok(tx.get(&key(7, &[owner]))?.unwrap_or_default())
 }
 pub(crate) fn advance(previous: &Inbox, deposit: &Deposit) -> Result<Inbox, Error> {
-    let sequence = previous
-        .sequence
-        .checked_add(1)
-        .filter(|n| *n <= czkp::MAX_INTEGER)
-        .ok_or(Error::Capacity)?;
     let mut hash = Sha256::new();
-    hash.update(b"cblc.obligation-inbox.v1\0");
+    hash.update(b"cblc.obligation-inbox.v2\0");
     hash.update(deposit.community);
     hash.update(deposit.recipient);
     hash.update(previous.root);
-    hash.update(sequence.to_be_bytes());
     hash.update(deposit.obligation);
     Ok(Inbox {
-        sequence,
         root: hash.finalize().into(),
     })
 }

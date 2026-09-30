@@ -2,7 +2,7 @@
 use super::*;
 use crate::extensions::{
     self, Deposit, ExtendedUpdate, ExtensionPolicy, ExtensionStatement, ExtensionVerifier,
-    Extensions, Inbox, PublicRecord,
+    Extensions, Inbox, PendingObligation, PublicRecord,
 };
 
 impl<V: AccountProofVerifier> AccountLedger<V> {
@@ -50,66 +50,89 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         self.apply_inner(grant, authorization, request, Some(update), clock)
     }
 
-    /// Anonymous proof-authorized delivery: the punished member cannot veto it.
-    /// Verification must prove recipient authority and a unique, already paid burn.
-    pub fn deposit(&mut self, deposit: &Deposit, proof: &[u8]) -> Result<Inbox, Error> {
+    /// Accept a delayed batch of anonymous settlements. Every outcome uses the
+    /// same envelope; there is no punishment-specific request or response.
+    /// A relay must mix transport ingress; batching cannot hide network metadata.
+    pub fn deposit_batch(
+        &mut self,
+        batch: &[(Deposit, Vec<u8>)],
+        clock: impl Fn() -> u64,
+    ) -> Result<(), Error> {
         let extensions = self
             .extensions
             .as_ref()
             .ok_or(Error::UnsupportedCapability)?;
-        if deposit.community != self.community
-            || [
-                deposit.recipient,
-                deposit.nullifier,
-                deposit.burn_nullifier,
-                deposit.obligation,
-            ]
-            .contains(&[0; 32])
-            || proof.is_empty()
-            || proof.len() > self.policy.max_proof_bytes
-        {
+        if batch.len() < usize::from(extensions.policy.minimum_deposit_batch) || batch.len() > 64 {
             return Err(Error::InvalidInput);
         }
-        extensions.verifier.verify(
-            &ExtensionStatement::Deposit {
-                policy: extensions.policy.clone(),
-                deposit: deposit.clone(),
-            },
-            proof,
-        )?;
+        let now = clock();
+        check_time(now, 0)?;
+        let mut seen = std::collections::BTreeSet::new();
+        for (deposit, proof) in batch {
+            if deposit.community != self.community
+                || [
+                    deposit.recipient,
+                    deposit.nullifier,
+                    deposit.authorization_nullifier,
+                    deposit.obligation,
+                ]
+                .contains(&[0; 32])
+                || !seen.insert(deposit.nullifier)
+                || deposit.release_epoch > now / extensions.policy.deposit_delay_seconds
+                || deposit.release_epoch == 0
+                || proof.is_empty()
+                || proof.len() > self.policy.max_proof_bytes
+            {
+                return Err(Error::InvalidInput);
+            }
+        }
+        // All cheap state/replay checks precede any expensive verification.
         let mut tx = self.connection.transaction()?;
         check_extension_config(&mut tx, Some(extensions))?;
-        if tx
-            .get::<Frontier>(&key(1, &[&deposit.recipient]))?
-            .is_none()
-        {
-            return Err(Error::Admission);
+        let mut fresh = Vec::new();
+        for (deposit, _) in batch {
+            fresh.push(check_deposit(&mut tx, deposit)?);
         }
-        let token_key = key(8, &[&deposit.nullifier]);
-        let burn_key = key(9, &[&deposit.burn_nullifier]);
-        // Markers retain a digest only: no deposit receipt or counterpart history.
-        let digest: [u8; 32] =
-            Sha256::digest(serde_json::to_vec(deposit).map_err(|_| Error::InvalidInput)?).into();
-        if let Some(stored) = tx.get::<[u8; 32]>(&token_key)? {
-            if stored != digest {
-                return Err(Error::Replay);
+        tx.rollback()?;
+        for ((deposit, proof), fresh) in batch.iter().zip(&fresh) {
+            if *fresh {
+                extensions.verifier.verify(
+                    &ExtensionStatement::Deposit {
+                        policy: extensions.policy.clone(),
+                        deposit: deposit.clone(),
+                    },
+                    proof,
+                )?;
             }
-            return extensions::inbox(&mut tx, &deposit.recipient);
         }
-        if tx.get::<bool>(&burn_key)?.is_some() {
-            return Err(Error::Replay);
+        let completed = clock();
+        check_time(completed, now)?;
+        let mut tx = self.connection.transaction()?;
+        check_extension_config(&mut tx, Some(extensions))?;
+        for (deposit, _) in batch {
+            if !check_deposit(&mut tx, deposit)? {
+                continue;
+            }
+            let previous = extensions::inbox(&mut tx, &deposit.recipient)?;
+            let next = extensions::advance(&previous, deposit)?;
+            let count_key = key(10, &[&deposit.recipient]);
+            let count: u8 = tx.get(&count_key)?.unwrap_or(0);
+            if count >= 64 {
+                return Err(Error::Capacity);
+            }
+            tx.put(&count_key, &(count + 1))?;
+            tx.put(&key(8, &[&deposit.nullifier]), &deposit_digest(deposit)?)?;
+            tx.put(&key(9, &[&deposit.authorization_nullifier]), &true)?;
+            tx.put(
+                &key(6, &[&deposit.recipient, &next.root]),
+                &PendingObligation {
+                    previous,
+                    commitment: deposit.obligation,
+                },
+            )?;
+            tx.put(&key(5, &[&deposit.recipient]), &next)?;
         }
-        let previous = extensions::inbox(&mut tx, &deposit.recipient)?;
-        let next = extensions::advance(&previous, deposit)?;
-        tx.put(&token_key, &digest)?;
-        tx.put(&burn_key, &true)?;
-        tx.put(
-            &key(6, &[&deposit.recipient, &next.sequence.to_be_bytes()]),
-            &deposit.obligation,
-        )?;
-        tx.put(&key(5, &[&deposit.recipient]), &next)?;
-        tx.commit()?;
-        Ok(next)
+        tx.commit()
     }
 
     /// Required gate for every first contact and every forum listing. A missing
@@ -196,27 +219,23 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     pub fn obligations(
         &mut self,
         owner: [u8; 32],
-        after: u64,
-        limit: u8,
-    ) -> Result<(Inbox, Vec<[u8; 32]>), Error> {
-        if limit == 0 || limit > 64 {
-            return Err(Error::InvalidInput);
-        }
+    ) -> Result<(Inbox, Vec<PendingObligation>), Error> {
         let mut tx = self.connection.transaction()?;
         let frontier = extensions::inbox(&mut tx, &owner)?;
-        if after > frontier.sequence {
-            return Err(Error::InvalidInput);
-        }
-        let end = after
-            .saturating_add(u64::from(limit))
-            .min(frontier.sequence);
+        let applied = extensions::applied(&mut tx, &owner)?;
+        let mut cursor = frontier.clone();
         let mut values = Vec::new();
-        for sequence in after + 1..=end {
-            values.push(
-                tx.get(&key(6, &[&owner, &sequence.to_be_bytes()]))?
-                    .ok_or(Error::Storage)?,
-            );
+        while cursor != applied {
+            if values.len() >= 64 {
+                return Err(Error::Capacity);
+            }
+            let value: PendingObligation = tx
+                .get(&key(6, &[&owner, &cursor.root]))?
+                .ok_or(Error::Storage)?;
+            cursor = value.previous.clone();
+            values.push(value);
         }
+        values.reverse();
         tx.rollback()?;
         Ok((frontier, values))
     }
@@ -231,4 +250,54 @@ pub(super) fn check_extension_config(
         return Err(Error::UnsupportedCapability);
     }
     Ok(())
+}
+
+fn deposit_digest(deposit: &Deposit) -> Result<[u8; 32], Error> {
+    Ok(Sha256::digest(serde_json::to_vec(deposit).map_err(|_| Error::InvalidInput)?).into())
+}
+fn check_deposit(tx: &mut Transaction<'_>, deposit: &Deposit) -> Result<bool, Error> {
+    if tx
+        .get::<Frontier>(&key(1, &[&deposit.recipient]))?
+        .is_none()
+    {
+        return Err(Error::Admission);
+    }
+    if let Some(stored) = tx.get::<[u8; 32]>(&key(8, &[&deposit.nullifier]))? {
+        return if stored == deposit_digest(deposit)? {
+            Ok(false)
+        } else {
+            Err(Error::Replay)
+        };
+    }
+    if tx
+        .get::<bool>(&key(9, &[&deposit.authorization_nullifier]))?
+        .is_some()
+    {
+        return Err(Error::Replay);
+    }
+    if tx.get::<u8>(&key(10, &[&deposit.recipient]))?.unwrap_or(0) >= 64 {
+        return Err(Error::Capacity);
+    }
+    Ok(true)
+}
+
+pub(super) fn consume(
+    tx: &mut Transaction<'_>,
+    owner: &[u8; 32],
+    update: &ExtendedUpdate,
+) -> Result<(), Error> {
+    let mut cursor = update.inbox.clone();
+    let mut count = 0;
+    while cursor != update.previous_inbox {
+        if count >= 64 {
+            return Err(Error::Capacity);
+        }
+        let entry_key = key(6, &[owner, &cursor.root]);
+        let pending: PendingObligation = tx.get(&entry_key)?.ok_or(Error::Storage)?;
+        tx.delete(&entry_key)?;
+        cursor = pending.previous;
+        count += 1;
+    }
+    tx.delete(&key(10, &[owner]))?;
+    tx.put(&key(7, &[owner]), &update.inbox)
 }

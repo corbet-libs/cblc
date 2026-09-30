@@ -30,7 +30,7 @@ jobs:
         id: proof-cache
         with:
           path: .proof-test
-          key: proofs-v1-${{ runner.os }}-${{ hashFiles('experiments/private-accounting/account-state/**', 'runtime/accounting/**', 'tests/**', 'package*.json') }}
+          key: proofs-v1-${{ runner.os }}-${{ hashFiles('experiments/private-accounting/account-state/**', 'runtime/accounting/**', 'tests/real-proof.mjs', 'tests/holder/**', 'package*.json') }}
       - if: steps.proof-cache.outputs.cache-hit != 'true'
         run: node tests/real-proof.mjs
       - run: cargo test --locked

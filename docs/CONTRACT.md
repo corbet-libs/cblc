@@ -37,7 +37,7 @@ holder and browser harnesses are test fixtures, not deployment code. Existing
 proof artifacts do not yet support punishment, change tokens or public counters;
 extension activation must be separate from v2 acceptance.
 
-Extension issuer APIs (`with_extensions`, `apply_extended`, `deposit`,
+Extension issuer APIs (`with_extensions`, `apply_extended`, `deposit_batch`,
 `obligations`, `public_record`) and their activation boundary are specified in
 [EXTENSIONS.md](EXTENSIONS.md). They are not enabled by the legacy v2 verifier.
 
@@ -59,3 +59,12 @@ relying-service challenge and expiry. The relying service supplies the expected
 context independently of member input and uses the result immediately; the
 facade cannot enforce a call in an external cfrm implementation. No record proof
 is possible through the legacy relation. Display checks persist nothing.
+
+
+Settlements carry no punishment tag. Deposits arrive as delayed batches (minimum
+size supplied by policy, at least two); clients need a mixing relay to protect
+transport metadata. Inbox frontiers are hashes, with no lifetime sequence. The
+previously consumed root is bound in every extended update. Pending rows are
+removed atomically on consumption, using exact primary-key deletes. Exact retry
+lookup precedes inbox changes, so a newly arrived obligation does not break
+recovery of the last accepted response.

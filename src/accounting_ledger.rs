@@ -117,7 +117,9 @@ fn check_pending(
 ) -> Result<(), Error> {
     check_extension_config(transaction, extension.map(|(e, _)| e))?;
     if let Some((_, update)) = extension
-        && crate::extensions::inbox(transaction, &request.statement.owner)? != update.inbox
+        && (crate::extensions::inbox(transaction, &request.statement.owner)? != update.inbox
+            || crate::extensions::applied(transaction, &request.statement.owner)?
+                != update.previous_inbox)
     {
         return Err(Error::Replay);
     }
@@ -344,11 +346,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         verify_device_authorization(authorization, grant, now)?;
         check_extension_config(&mut transaction, extension.map(|(e, _)| e))?;
         check_root(&mut transaction, &statement.owner, &root_key)?;
-        if let Some((_, update)) = extension
-            && crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox
-        {
-            return Err(Error::Replay);
-        }
         if let Some(result) = cached(
             &mut transaction,
             &statement.owner,
@@ -410,11 +407,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         // original response before applying expiry/CAS checks to a fresh write.
         check_extension_config(&mut transaction, extension.map(|(e, _)| e))?;
         check_root(&mut transaction, &statement.owner, &root_key)?;
-        if let Some((_, update)) = extension
-            && crate::extensions::inbox(&mut transaction, &statement.owner)? != update.inbox
-        {
-            return Err(Error::Replay);
-        }
         if let Some(result) = cached(
             &mut transaction,
             &statement.owner,
@@ -477,7 +469,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             },
         )?;
         if let Some((_, update)) = extension {
-            transaction.put(&key(7, &[&statement.owner]), &update.inbox)?;
+            extensions::consume(&mut transaction, &statement.owner, update)?;
         }
         // Replace the latest signed acceptance; no historical request table is retained.
         transaction.put(&key(2, &[&statement.owner]), &acceptance)?;
