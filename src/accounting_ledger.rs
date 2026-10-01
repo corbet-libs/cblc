@@ -28,6 +28,7 @@ use std::path::Path;
 
 mod extensions;
 mod rotation;
+mod obligations;
 use rotation::check_root;
 pub use rotation::{RootRotation, root_rotation_bytes};
 mod tuning;
