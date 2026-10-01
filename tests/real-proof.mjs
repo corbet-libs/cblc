@@ -1,4 +1,4 @@
-// CI-only synthetic holder. Prove the actual migrated account circuit, then retain
+// CI-only holder for fictional members. Prove the actual migrated account circuit, then retain
 // PUBLIC proofs/artifacts for the independent Rust issuer test. No private witness is written.
 import assert from 'node:assert/strict';
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
@@ -26,7 +26,7 @@ await writeFile(resolve(directory,'circuit.json'),circuitBytes);
 const lock = JSON.parse(await readFile('experiments/private-accounting/account-state/setup-lock.json'));
 const setup = {};
 for(const spec of lock.files) {
-  const response=await fetch(spec.url,{headers:spec.range?{Range:`bytes=0-${spec.bytes-1}`}:{},redirect:'error',signal:AbortSignal.timeout(120000)});
+  const response=await fetch(spec.url,{headers:{'User-Agent':'LibraryValidation/1.0',...(spec.range?{Range:`bytes=0-${spec.bytes-1}`}:{})},redirect:'error',signal:AbortSignal.timeout(120000)});
   assert.equal(response.status,spec.range?206:200);
   const chunks=[];let size=0;
   for await(const chunk of response.body) {size+=chunk.length;assert(size<=spec.bytes);chunks.push(chunk);}
@@ -65,6 +65,15 @@ try {
   const checkpoint=await checkpointFromVerified(community,entries,hashes);
   const genesis=await AccountWitness.genesis({hashes,community,policy,checkpoint,ownerIndex:0,ownerSecret:bytes(10),now:110});
   const reserve=await genesis.next.reserve({peerIndex:1,role:0,nonce:bytes(50),group:bytes(51),contactPolicy:bytes(52),now:120});
+  const limits={maxBytes:1024*1024,maxMapEntries:256,maxSlots:64};
+  for(const candidate of [genesis,reserve]) {
+    const restored=await AccountWitness.restoreCheckpoint({hashes,enrollment:checkpoint,
+      ownerSecret:bytes(10),expectedStatement:candidate.statement,
+      checkpointBytes:candidate.next.exportCheckpoint(limits),limits});
+    assert.equal(restored.commitment,candidate.next.commitment);
+    assert.deepEqual(restored.exportCheckpoint(limits),candidate.next.exportCheckpoint(limits));
+    candidate.next=restored;
+  }
   candidates=[genesis,reserve];
   ledgerCandidates=[];
   if(needLedger) {
