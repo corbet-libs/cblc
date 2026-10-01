@@ -1,6 +1,7 @@
 //! Exercise the production policy helpers at their public bounds.
 
-use cblc::{Error, accounting::AccountPolicy, admission::MAX_INTEGER};
+use cblc::{Error, accounting::AccountPolicy};
+use czkp::MAX_INTEGER;
 
 fn policy() -> AccountPolicy {
     AccountPolicy {
