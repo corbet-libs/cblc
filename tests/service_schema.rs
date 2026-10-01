@@ -81,7 +81,9 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap();
-    ledger.admit_checkpoint(0, request.statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, request.statement.enrollment_root)
+        .unwrap();
     let mut service = AccountService::new(ledger, || 120, 1024 * 1024).unwrap();
     let response = service.handle_for_member(&[7; 48], operation).unwrap();
     let accepted = valid(&response);

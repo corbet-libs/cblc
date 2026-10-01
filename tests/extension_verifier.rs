@@ -102,7 +102,10 @@ fn missing_worker_refuses_both_pools_and_releases_capacity() {
         },
     };
     for _ in 0..2 {
-        assert_eq!(verifier.verify(&statement, &[1]), Err(Error::CryptoProvider));
+        assert_eq!(
+            verifier.verify(&statement, &[1]),
+            Err(Error::CryptoProvider)
+        );
         assert_eq!(
             verifier.verify_anonymous(&statement, &[1]),
             Err(Error::CryptoProvider)

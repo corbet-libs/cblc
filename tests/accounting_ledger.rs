@@ -330,7 +330,8 @@ fn successor_losing_during_verification_cannot_commit_its_state_or_response() {
         // Both real competing operations reserve; neither settles an event.
         assert_eq!(winning.statement.settlement_marker, [0; 32]);
         assert_eq!(
-            db.query_row("SELECT count(*) FROM markers", [], |row| row.get::<_, i64>(0))
+            db.query_row("SELECT count(*) FROM markers", [], |row| row
+                .get::<_, i64>(0))
                 .unwrap(),
             0
         );

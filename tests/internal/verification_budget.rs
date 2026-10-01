@@ -26,9 +26,15 @@ fn invalid_host_limits_or_namespace_are_refused() {
             ..limits()
         },
     ] {
-        assert!(matches!(Budget::new("community", bad), Err(Error::InvalidInput)));
+        assert!(matches!(
+            Budget::new("community", bad),
+            Err(Error::InvalidInput)
+        ));
     }
-    assert!(matches!(Budget::new("", limits()), Err(Error::InvalidInput)));
+    assert!(matches!(
+        Budget::new("", limits()),
+        Err(Error::InvalidInput)
+    ));
 }
 
 #[test]
