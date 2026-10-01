@@ -105,7 +105,9 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
     }
 
     /// Recover composition ownership without duplicating or recreating state.
-    pub fn into_ledger(self) -> AccountLedger<V> { self.ledger }
+    pub fn into_ledger(self) -> AccountLedger<V> {
+        self.ledger
+    }
 
     /// Enforce this bound while reading the transport body too, before allocation.
     pub fn max_request_bytes(&self) -> usize {
@@ -118,6 +120,25 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
         }
         let request = serde_json::from_slice(body).map_err(|_| Error::InvalidInput)?;
         serde_json::to_vec(&self.handle(request)?).map_err(|_| Error::InvalidInput)
+    }
+
+    /// Door composition supplies the canonical pseudonym from its freshly
+    /// authenticated membership, independently of the member's request body.
+    pub fn handle_for_member(
+        &mut self,
+        pseudonym: &[u8; 48],
+        request: AccountServiceRequest,
+    ) -> Result<AccountServiceResponse, Error> {
+        let grant = match &request {
+            AccountServiceRequest::Apply { grant, .. }
+            | AccountServiceRequest::ApplyExtended { grant, .. }
+            | AccountServiceRequest::Obligations { grant, .. }
+            | AccountServiceRequest::Status { grant, .. } => grant,
+        };
+        if grant.pseudonym != data_encoding::HEXLOWER.encode(pseudonym) {
+            return Err(Error::Admission);
+        }
+        self.handle(request)
     }
 
     pub fn handle(
@@ -136,13 +157,35 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                 .ledger
                 .apply(&grant, &authorization, &request, &self.clock)
                 .map(AccountServiceResponse::Apply),
-            AccountServiceRequest::ApplyExtended { grant, authorization, request, update } => {
-                let issuer = self.extension_issuer.as_ref().ok_or(Error::UnsupportedCapability)?;
-                let acceptance = self.ledger.apply_extended(&grant, &authorization, &request, &update, &self.clock)?;
+            AccountServiceRequest::ApplyExtended {
+                grant,
+                authorization,
+                request,
+                update,
+            } => {
+                let issuer = self
+                    .extension_issuer
+                    .as_ref()
+                    .ok_or(Error::UnsupportedCapability)?;
+                let acceptance = self.ledger.apply_extended(
+                    &grant,
+                    &authorization,
+                    &request,
+                    &update,
+                    &self.clock,
+                )?;
                 let certificate = self.ledger.certify_extended(&acceptance, issuer)?;
-                Ok(AccountServiceResponse::ApplyExtended { acceptance, certificate })
+                Ok(AccountServiceResponse::ApplyExtended {
+                    acceptance,
+                    certificate,
+                })
             }
-            AccountServiceRequest::Obligations { grant, authorization, request } => self.ledger
+            AccountServiceRequest::Obligations {
+                grant,
+                authorization,
+                request,
+            } => self
+                .ledger
                 .authenticated_obligations(&grant, &authorization, &request, &self.clock)
                 .map(AccountServiceResponse::Obligations),
             AccountServiceRequest::Status {
