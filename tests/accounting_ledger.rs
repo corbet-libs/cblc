@@ -1,6 +1,8 @@
 //! Real maintained proofs, signed authority and libSQL storage adversaries.
 
 mod common;
+#[path = "accounting_ledger/wire.rs"]
+mod wire;
 use cblc::{Error, accounting::*, accounting_ledger::*};
 use common::{Fixture, proofs::{self, RealVerifier}};
 use data_encoding::BASE64URL_NOPAD as B64;
