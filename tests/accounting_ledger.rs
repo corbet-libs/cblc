@@ -1,6 +1,10 @@
 //! Real maintained proofs, signed authority and libSQL storage adversaries.
 
 mod common;
+#[path = "accounting_ledger/bounds.rs"]
+mod bounds;
+#[path = "accounting_ledger/integrity.rs"]
+mod integrity;
 #[path = "accounting_ledger/wire.rs"]
 mod wire;
 use cblc::{Error, accounting::*, accounting_ledger::*};
