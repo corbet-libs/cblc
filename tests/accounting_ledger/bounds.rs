@@ -104,3 +104,49 @@ fn signed_absent_account_status_does_not_register_or_mint_credit() {
         .unwrap();
     assert_eq!(accepted.statement.next_version, 0);
 }
+
+#[test]
+fn valid_signed_policy_change_is_refused_before_the_real_verifier_runs() {
+    let f = Fixture::new();
+    let verifier = RealVerifier::default();
+    let calls = verifier.calls.clone();
+    let mut ledger = AccountLedger::with_store(
+        MemoryStore::default(),
+        f.trust.clone(),
+        policy(),
+        verifier,
+        SigningKey::from_bytes(&[9; 32]),
+    )
+    .unwrap();
+    let original = genesis(&f);
+    ledger
+        .admit_checkpoint(0, original.statement.enrollment_root)
+        .unwrap();
+    let mut changed = original.clone();
+    changed.statement.policy.initial_credit = 2;
+    changed.statement.policy_digest = changed
+        .statement
+        .policy
+        .digest(&changed.statement.community)
+        .unwrap();
+    sign(&mut changed, &f.device);
+    assert_eq!(
+        ledger.apply(
+            &f.grant(7, &f.device),
+            &f.authorize(7, &f.device),
+            &changed,
+            || 120
+        ),
+        Err(Error::PolicyMismatch)
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    ledger
+        .apply(
+            &f.grant(7, &f.device),
+            &f.authorize(7, &f.device),
+            &original,
+            || 120,
+        )
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}

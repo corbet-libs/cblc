@@ -359,8 +359,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             return Ok(result);
         }
         check_config(&mut transaction, &self.config)?;
-        if statement.policy != self.policy.account || statement.policy_digest != self.policy_digest
-        {
+        // statement_bytes already checks the digest of this exact policy and
+        // the community was matched above. Equal policy implies equal digest.
+        if statement.policy != self.policy.account {
             return Err(Error::PolicyMismatch);
         }
         check_pending(
@@ -420,10 +421,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             return Ok(result);
         }
         check_config(&mut transaction, &self.config)?;
-        if statement.policy != self.policy.account || statement.policy_digest != self.policy_digest
-        {
-            return Err(Error::PolicyMismatch);
-        }
+        // The request and this handle's policy cannot change across verification.
+        // check_config above rechecks the mutable persisted configuration.
         check_pending(
             &mut transaction,
             request,
