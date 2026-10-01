@@ -67,3 +67,9 @@ against raw JSON and independent annotated source inventory. Every emitted sourc
 location must be positive; all raw instantiated counters remain in the retained
 artifact. Missing/mismatched inventories refuse the gate. Committed lock policy
 is checked before refresh so a fresh resolver cannot conceal revision pins.
+
+Schema projection is checked before constructing expensive proofs. Public proof
+fixtures are saved immediately after their real generation/verification step,
+so a later unrelated failure does not discard that work. Only exact input keys
+are restored; subsequent native and instrumented issuer tests still execute the
+real verifier. This uses maintained Actions [restore/save actions](https://github.com/actions/cache/blob/main/restore/README.md).

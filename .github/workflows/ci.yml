@@ -103,12 +103,14 @@ jobs:
 
         cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }'
     - run: cargo clippy --locked --all-targets --all-features -- -D warnings
+    - name: Check schema projection before constructing expensive proofs
+      run: cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint
     - uses: actions/setup-node@v4
       with:
         node-version: 24
     - run: npm ci --ignore-scripts --no-audit --no-fund
     - run: npm test
-    - uses: actions/cache@v4
+    - uses: actions/cache/restore@v4
       id: proof-cache
       with:
         path: .proof-test
@@ -117,8 +119,13 @@ jobs:
           }}
     - if: steps.proof-cache.outputs.cache-hit != 'true'
       run: node tests/real-proof.mjs
+    - uses: actions/cache/save@v4
+      if: steps.proof-cache.outputs.cache-hit != 'true'
+      with:
+        path: .proof-test
+        key: ${{ steps.proof-cache.outputs.cache-primary-key }}
     - run: cargo test --locked --all-features --no-fail-fast -- --test-threads=2
-    - uses: actions/cache@v4
+    - uses: actions/cache/restore@v4
       id: extension-cache
       with:
         path: .extension-test
@@ -142,6 +149,11 @@ jobs:
         sha256sum package-lock.json >> .extension-test/source.txt'
     - run: node tests/extensions-proof.mjs
       if: steps.extension-cache.outputs.cache-hit != 'true'
+    - uses: actions/cache/save@v4
+      if: steps.extension-cache.outputs.cache-hit != 'true'
+      with:
+        path: .extension-test
+        key: ${{ steps.extension-cache.outputs.cache-primary-key }}
     - name: Reverify unchanged public proof fixtures against the current issuer
       if: steps.extension-cache.outputs.cache-hit == 'true'
       run: CBLC_EXTENSION_ISSUER="$PWD/target/debug/examples/extension_issuer" node
