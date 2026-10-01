@@ -115,3 +115,13 @@ An imported overlong 65-entry chain is tested through the actual storage helpers
 with rollback; this is corrupt-state refusal, never simulated proof acceptance.
 Primitive-only request-digest serialization keeps the same error normalization
 with Result::or rather than an unreachable error closure; encoded bytes do not change.
+
+With all features, the explicit extension fixture also projects the actual
+activated issuer's public material, uses real csgn signatures and Beacon cache
+floors, and verifies a real record through the authenticated scope/manifest.
+The fixture separately rejects altered context, manifest hash, circuit/key group
+bytes, wrong certificate issuer, post-activation manifest replacement and stale
+publication floors. Its complete copied artifact directory must verify before
+tampering, avoiding a false pass caused by absent setup files. Pure bounded
+metadata parsing uses the original public manifest and real malformed files;
+it never supplies a successful proof verdict. No new production exclusion exists.

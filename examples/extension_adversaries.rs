@@ -4,6 +4,9 @@ mod common;
 #[path = "../tests/support/inspect.rs"]
 #[allow(dead_code)]
 mod inspection;
+#[cfg(feature = "publication")]
+#[path = "../tests/support/publication.rs"]
+mod publication;
 use cblc::{
     Error,
     accounting::*,
@@ -60,14 +63,28 @@ fn base(
     fixture: &Fixture,
     settings: AccountLedgerPolicy,
 ) -> AccountLedger<RealVerifier> {
-    AccountLedger::open(
+    let ledger = AccountLedger::open(
         path,
         fixture.trust.clone(),
         settings,
         RealVerifier::default(),
         SigningKey::from_bytes(&[9; 32]),
     )
-    .unwrap()
+    .unwrap();
+    #[cfg(feature = "publication")]
+    let ledger = {
+        let mut unactivated = ledger;
+        assert_eq!(
+            unactivated.public_verifier_material(
+                1,
+                1,
+                &cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap()
+            ),
+            Err(Error::UnsupportedCapability)
+        );
+        unactivated
+    };
+    ledger
 }
 fn request(value: &Value, scope: &AccountProofScope, fixture: &Fixture, id: u8) -> AccountRequest {
     let statement: AccountStatement = serde_json::from_value(value["statement"].clone()).unwrap();
@@ -155,6 +172,25 @@ fn main() {
     ledger
         .admit_checkpoint(0, serde_json::from_value(init["root"].clone()).unwrap())
         .unwrap();
+    #[cfg(feature = "publication")]
+    let authenticated_material = {
+        let material = publication::exercise(&mut ledger);
+        let mut service =
+            cblc::accounting_service::AccountService::new(ledger, || 110, 16 * 1024 * 1024)
+                .unwrap();
+        assert_eq!(
+            service.public_verifier_material(1, 1),
+            Err(Error::UnsupportedCapability)
+        );
+        service = service
+            .with_extension_issuer(cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap());
+        assert_eq!(
+            service.public_verifier_material(1, 1).unwrap().community,
+            fixture.trust.community_id
+        );
+        ledger = service.into_ledger();
+        material
+    };
     let database = inspection::Connection::open(&path).unwrap();
     let genesis: Vec<&Value> = trace
         .iter()
@@ -264,6 +300,8 @@ fn main() {
         .decode(value["proof"].as_str().unwrap().as_bytes())
         .unwrap();
     let now = value["now"].as_u64().unwrap();
+    #[cfg(feature = "publication")]
+    publication::verify_record(&authenticated_material, &record, &proof);
     let mut read_request = AccountStatusRequest {
         community: record.community,
         owner: record.owner,
@@ -378,6 +416,11 @@ fn main() {
         Err(Error::Capacity)
     );
     replace(&database, b"extensions", b"[]");
+    #[cfg(feature = "publication")]
+    assert_eq!(
+        ledger.public_verifier_material(1, 1, &certificate),
+        Err(Error::UnsupportedCapability)
+    );
     assert_eq!(
         ledger.check_record(record.owner, &record.context, &record, &proof, || now),
         Err(Error::UnsupportedCapability)

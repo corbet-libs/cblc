@@ -75,6 +75,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             },
             &activation.proof,
         )?;
+        #[cfg(feature = "publication")]
+        let artifact_binding =
+            crate::publication::binding::configured(&verifier.artifact_config, &scope)?;
         let config =
             serde_json::to_vec(&(policy.clone(), &scope)).map_err(|_| Error::InvalidInput)?;
         let mut tx = self.connection.transaction()?;
@@ -85,6 +88,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.put(b"extensions", &config)?;
         tx.commit()?;
         self.extensions = Some(Extensions {
+            #[cfg(feature = "publication")]
+            artifact_config: verifier.artifact_config.clone(),
+            #[cfg(feature = "publication")]
+            artifact_binding,
             policy,
             budget,
             verifier: Box::new(verifier),

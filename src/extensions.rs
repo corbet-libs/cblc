@@ -160,6 +160,10 @@ pub struct ExtensionActivation {
     pub proof: Vec<u8>,
 }
 pub(crate) struct Extensions {
+    #[cfg(feature = "publication")]
+    pub artifact_config: std::path::PathBuf,
+    #[cfg(feature = "publication")]
+    pub artifact_binding: crate::publication::binding::Binding,
     pub policy: ExtensionPolicy,
     pub verifier: Box<dyn ExtensionVerifier>,
     pub config: Vec<u8>,

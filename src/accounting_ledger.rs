@@ -31,6 +31,8 @@ mod obligations;
 mod rotation;
 use rotation::check_root;
 pub use rotation::{RootRotation, root_rotation_bytes};
+#[cfg(feature = "publication")]
+mod publication;
 mod tuning;
 use self::extensions::check_extension_config;
 use crate::extensions::{ExtendedUpdate, ExtensionStatement, Extensions};
@@ -38,6 +40,7 @@ pub use tuning::WaitingPeriodTuning;
 use tuning::{StoredConfig, check_config, config_bytes};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountLedgerPolicy {
     pub account: AccountPolicy,
@@ -46,6 +49,22 @@ pub struct AccountLedgerPolicy {
     /// Common checkpoint slots have exactly this duration. Only one root can be
     /// admitted for a slot; publication is a trusted operator operation.
     pub checkpoint_period_seconds: u64,
+}
+
+impl AccountLedgerPolicy {
+    /// Validate the existing host bounds and canonical economic policy.
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.max_authorization_seconds == 0
+            || self.max_authorization_seconds > MAX_INTEGER
+            || self.max_proof_bytes == 0
+            || self.max_proof_bytes > i32::MAX as usize
+            || self.checkpoint_period_seconds == 0
+            || self.checkpoint_period_seconds > MAX_INTEGER
+        {
+            return Err(Error::InvalidInput);
+        }
+        self.account.validate()
+    }
 }
 
 pub struct AccountLedger<V: AccountProofVerifier> {
@@ -179,16 +198,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         operator: SigningKey,
     ) -> Result<Self, Error> {
         let mut connection: Box<dyn AccountStorage> = Box::new(store);
-        if !crate::admission::scope(&trust.community_id)
-            || policy.max_authorization_seconds == 0
-            || policy.max_authorization_seconds > MAX_INTEGER
-            || policy.max_proof_bytes == 0
-            || policy.max_proof_bytes > i32::MAX as usize
-            || policy.checkpoint_period_seconds == 0
-            || policy.checkpoint_period_seconds > MAX_INTEGER
-        {
+        if !crate::admission::scope(&trust.community_id) {
             return Err(Error::InvalidInput);
         }
+        policy.validate()?;
         decode::<32>(&trust.policy_digest)?;
         let community: [u8; 32] = Sha256::digest(trust.community_id.as_bytes()).into();
         let mut policy_digest = policy.account.digest(&community)?;
