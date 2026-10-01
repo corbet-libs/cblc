@@ -145,6 +145,10 @@ jobs:
       with:
         name: proof-fixtures
         path: .proof-test
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - run: npm ci --ignore-scripts --no-audit --no-fund
     - uses: dtolnay/rust-toolchain@nightly
       with:
         components: llvm-tools-preview
