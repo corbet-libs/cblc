@@ -14,6 +14,7 @@ import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
 import {createProver} from '@corbet-labs/czkp/prove';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
+import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mjs';
 import init,{prepare} from '../.extension-wasm/cwlt.js';
 await init({module_or_path:await readFile('.extension-wasm/cwlt_bg.wasm')});
@@ -79,7 +80,23 @@ async function submit(member,candidates,label,measure=false,expected=true){
   const first=candidates[0],last=candidates.at(-1),statement={...last.statement,previousState:first.statement.previousState};
   const update={previousInbox:{root:toArray(first.input.previous_inbox)},inbox:{root:toArray(last.input.inbox)},effect:last.update?.effect??{kind:'update'}};
   const request={op:'apply',member,statement,update,proof:encodeBundle(proofs)};
-  const certificate=await call(request,expected);if(expected)last.next.certificate=certificate;
+  const certificate=await call(request,expected);
+  if(expected) {
+    const original=last.next,limits={maxBytes:1024*1024,maxMapEntries:256,maxSlots:64};
+    const checkpointBytes=encodeExtensionCheckpoint(original,limits);
+    const options={hashes,extension:original.extension,transition,enrollment:original.checkpoint,
+      ownerSecret:original.ownerSecret,expectedStatement:statement,checkpointBytes,limits};
+    const restored=await restoreExtensionCheckpoint(options);
+    assert.equal(restored.commitment,original.commitment);
+    assert.deepEqual(encodeExtensionCheckpoint(restored,limits),checkpointBytes);
+    // Checkpoint bytes stay in this fictional member's memory, never artifacts.
+    for(const key of ['debt','accepted','declined','punished','authorization']) {
+      const corrupt=JSON.parse(new TextDecoder().decode(checkpointBytes));
+      corrupt.opening[key]=(BigInt(corrupt.opening[key])+1n).toString();
+      await assert.rejects(restoreExtensionCheckpoint({...options,checkpointBytes:new TextEncoder().encode(JSON.stringify(corrupt))}));
+    }
+    restored.certificate=certificate;last.next=restored;
+  }
   return {next:last.next,request};
 }
 async function anonymous(candidate,label,measure=false){return {statement:candidate.statement,proof:encodeBundle([{proof:await proof(candidate.statement.kind,candidate.input,label,measure)}])};}
@@ -97,6 +114,14 @@ try{
   const checkpoint=await checkpointFromVerified(community,entries,hashes);
   const genesis=[];
   for(let i=0;i<4;i++)genesis.push(await ExtensionWitness.genesis({hashes,community,policy,extension,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++}));
+  const wasmHashes=await Barretenberg.new({backend:BackendType.Wasm,threads:1,skipSrsInit:true});
+  try {
+    const limits={maxBytes:1024*1024,maxMapEntries:256,maxSlots:64};
+    const checkpointBytes=encodeExtensionCheckpoint(genesis[0].next,limits);
+    const restored=await restoreExtensionCheckpoint({hashes:extensionHashes(wasmHashes),extension,transition,
+      enrollment:checkpoint,ownerSecret:bytes(20),expectedStatement:genesis[0].statement,checkpointBytes,limits});
+    assert.deepEqual(encodeExtensionCheckpoint(restored,limits),checkpointBytes);
+  } finally {await wasmHashes.destroy();}
   genesis[0].preparedProof=await proof('update',genesis[0].input,'genesis');
   // Capacity uses the actual pinned proof size, including hex/JSON framing.
   // This checks the transport bound only; repeated genesis is not a valid chain.
