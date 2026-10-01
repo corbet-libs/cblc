@@ -248,7 +248,7 @@ jobs:
         retention-days: 7
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
-true:
+'on':
   push:
     branches:
     - main
