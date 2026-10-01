@@ -131,3 +131,12 @@ and `AccountServiceResponse` directly through its existing ToSchema registry,
 without Object placeholders or copied accounting DTOs. Shape validation is not
 admission, proof verification or current-frontier authority. The actual holder
 and issuer tests independently exercise those predicates.
+Schema generation uses Schemars on canonical Serde types, then its maintained
+constant/unevaluated-property transforms and Utoipa's OpenAPI model. The root
+request/response `ToSchema` API is preserved; nested fields are generated inline,
+not copied into another DTO. CI compares the complete generated JSON before and
+after OpenAPI projection and validates real requests and issued responses,
+including unknown tagged-enum fields. This addresses the Utoipa 6 tagged-enum
+derive's missing propagation of container `deny_unknown_fields`.
+See [Schemars settings](https://docs.rs/schemars/latest/schemars/generate/struct.SchemaSettings.html)
+and [Serde compatibility](https://docs.rs/schemars/latest/schemars/).

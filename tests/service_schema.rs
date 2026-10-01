@@ -15,10 +15,22 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use utoipa::ToSchema;
 
-fn validator<T: ToSchema>() -> jsonschema::Validator {
+fn validator<T: ToSchema + schemars::JsonSchema>() -> jsonschema::Validator {
     let mut components = Vec::new();
     T::schemas(&mut components);
     let mut schema = serde_json::to_value(T::schema()).unwrap();
+    // Ensure the OpenAPI projection has not silently discarded a constraint.
+    // The independent maintained generator reads the actual Serde wire types.
+    let original = schemars::generate::SchemaSettings::draft2020_12()
+        .with(|settings| {
+            settings.meta_schema = None;
+            settings.inline_subschemas = true;
+        })
+        .with_transform(schemars::transform::ReplaceConstValue)
+        .with_transform(schemars::transform::ReplaceUnevaluatedProperties)
+        .into_generator()
+        .into_root_schema_for::<T>();
+    assert_eq!(schema, serde_json::to_value(original).unwrap());
     let schemas: serde_json::Map<String, Value> = components
         .into_iter()
         .map(|(name, value)| (name, serde_json::to_value(value).unwrap()))
@@ -27,7 +39,7 @@ fn validator<T: ToSchema>() -> jsonschema::Validator {
     jsonschema::validator_for(&schema).unwrap()
 }
 
-fn valid<T: ToSchema + Serialize>(value: &T) -> Value {
+fn valid<T: ToSchema + Serialize + schemars::JsonSchema>(value: &T) -> Value {
     let json = serde_json::to_value(value).unwrap();
     assert!(validator::<T>().is_valid(&json));
     json
@@ -57,7 +69,7 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
     let mut nested = encoded;
     nested["request"]["untrustedOverride"] = true.into();
     assert!(!schema.is_valid(&nested));
-    valid(&AccountServiceRequest::ApplyExtended {
+    let extended = valid(&AccountServiceRequest::ApplyExtended {
         grant: grant.clone(),
         authorization: authorization.clone(),
         request: Box::new(request.clone()),
@@ -67,6 +79,9 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
             effect: Effect::Update,
         },
     });
+    let mut unknown_effect = extended;
+    unknown_effect["update"]["effect"]["override"] = true.into();
+    assert!(!schema.is_valid(&unknown_effect));
     let policy = AccountLedgerPolicy {
         account: request.statement.policy.clone(),
         max_authorization_seconds: 100,
@@ -87,6 +102,9 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
     let mut service = AccountService::new(ledger, || 120, 1024 * 1024).unwrap();
     let response = service.handle_for_member(&[7; 48], operation).unwrap();
     let accepted = valid(&response);
+    let mut unexpected = accepted.clone();
+    unexpected["override"] = true.into();
+    assert!(!validator::<AccountServiceResponse>().is_valid(&unexpected));
     let mut altered = accepted;
     altered["value"]["proofScope"]["verifyingKeyDigest"] = json!("not-bytes");
     assert!(!validator::<AccountServiceResponse>().is_valid(&altered));

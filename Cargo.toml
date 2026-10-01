@@ -19,10 +19,11 @@ missing_docs = "warn"
 
 [features]
 default = []
-schema = ["dep:utoipa", "czkp/schema"]
+schema = ["dep:utoipa", "dep:schemars", "czkp/schema"]
 
 [dependencies]
 utoipa = { version = "6", optional = true }
+schemars = { version = "1", optional = true }
 cthl = { git = "https://github.com/corbet-foss/cthl", branch = "main" }
 cpns = { git = "https://github.com/corbet-foss/cpns", branch = "main", default-features = false }
 futures = "0.3"

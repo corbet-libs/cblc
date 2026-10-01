@@ -30,7 +30,7 @@ impl AccountProofVerifier for ProcessAccountVerifier {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum AccountServiceRequest {
     Apply {
@@ -57,7 +57,7 @@ pub enum AccountServiceRequest {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "action",
     content = "value",
