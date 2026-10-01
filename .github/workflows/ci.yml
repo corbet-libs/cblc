@@ -117,7 +117,7 @@ jobs:
           }}
     - if: steps.proof-cache.outputs.cache-hit != 'true'
       run: node tests/real-proof.mjs
-    - run: cargo test --locked --no-fail-fast -- --test-threads=2
+    - run: cargo test --locked --all-features --no-fail-fast -- --test-threads=2
     - uses: actions/cache@v4
       id: extension-cache
       with:

@@ -124,3 +124,10 @@ The response is not a current-record permission or proof of absent later changes
 There is still no production settlement ingress: delayed batches do not satisfy
 the no-counterpart-disclosure transport requirement. Forum/Waves local current
 record verification and authenticated verifier publication remain unresolved.
+
+The optional `schema` feature derives Utoipa6 schemas from the exact serde
+request/response and nested owner types. Door may compose `AccountServiceRequest`
+and `AccountServiceResponse` directly through its existing ToSchema registry,
+without Object placeholders or copied accounting DTOs. Shape validation is not
+admission, proof verification or current-frontier authority. The actual holder
+and issuer tests independently exercise those predicates.
