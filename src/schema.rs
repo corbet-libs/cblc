@@ -11,8 +11,8 @@ fn schema<T: JsonSchema>() -> RefOr<Schema> {
             settings.meta_schema = None;
             settings.inline_subschemas = true;
         })
-        .with_transform(transform::ReplaceConstValue)
-        .with_transform(transform::ReplaceUnevaluatedProperties)
+        .with_transform(transform::ReplaceConstValue::default())
+        .with_transform(transform::ReplaceUnevaluatedProperties::default())
         .into_generator()
         .into_root_schema_for::<T>();
     serde_json::from_value(schema.into())

@@ -26,8 +26,8 @@ fn validator<T: ToSchema + schemars::JsonSchema>() -> jsonschema::Validator {
             settings.meta_schema = None;
             settings.inline_subschemas = true;
         })
-        .with_transform(schemars::transform::ReplaceConstValue)
-        .with_transform(schemars::transform::ReplaceUnevaluatedProperties)
+        .with_transform(schemars::transform::ReplaceConstValue::default())
+        .with_transform(schemars::transform::ReplaceUnevaluatedProperties::default())
         .into_generator()
         .into_root_schema_for::<T>();
     assert_eq!(schema, serde_json::to_value(original).unwrap());
