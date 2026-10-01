@@ -60,3 +60,9 @@ not accept proofs or simulate the ledger.
 The single implementation concurrency group uses GitHub's supported `queue: max`
 to retain pending changed-input runs when Dependabot arrives; only one run executes
 at a time. See the [official concurrency contract](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+
+The zero-exclusion source gate now cross-checks every LCOV line and branch
+against raw JSON and independent annotated source inventory. Every emitted source
+location must be positive; all raw instantiated counters remain in the retained
+artifact. Missing/mismatched inventories refuse the gate. Committed lock policy
+is checked before refresh so a fresh resolver cannot conceal revision pins.
