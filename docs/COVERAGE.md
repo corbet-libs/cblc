@@ -38,3 +38,11 @@ The counters measure verifier-boundary invocations, including cached real
 results. Controlled synchronization wraps real verification to exercise commit
 races. Process-failure fixtures can only refuse; no successful synthetic verdict
 is used. Extension proof traces remain a separate complete relation.
+
+Public extension proofs are cached only by exact circuit/runtime/holder lock and
+fixture inputs, with construction commit and dependency-lock digest retained.
+A cache hit executes the current real issuer against every public request and
+checks exact outcomes; it does not substitute cached acceptance for verification.
+Device/circuit/fixture changes invalidate the cache and rerun actual native and
+wasm proof construction. Coverage separately replays the same public evidence
+under instrumentation. No private witness or seed is part of this cache.

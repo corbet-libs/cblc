@@ -115,14 +115,34 @@ jobs:
     - if: steps.proof-cache.outputs.cache-hit != 'true'
       run: node tests/real-proof.mjs
     - run: cargo test --locked -- --test-threads=2
+    - uses: actions/cache@v4
+      id: extension-cache
+      with:
+        path: .extension-test
+        key: extension-public-v1-${{ runner.os }}-${{ hashFiles('circuits/extensions/**',
+          'runtime/extensions/**', 'tests/extensions-proof.mjs', 'tests/common/mod.rs',
+          'examples/extension_issuer.rs', 'package*.json') }}
     - run: node runtime/extensions/compile.mjs
+      if: steps.extension-cache.outputs.cache-hit != 'true'
     - uses: taiki-e/install-action@v2
       with:
         tool: wasm-pack
+      if: steps.extension-cache.outputs.cache-hit != 'true'
     - run: wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir
         "$PWD/.extension-wasm"
+      if: steps.extension-cache.outputs.cache-hit != 'true'
     - run: cargo build --locked --example extension_issuer
+    - name: Record proof construction provenance
+      if: steps.extension-cache.outputs.cache-hit != 'true'
+      run: 'git rev-parse HEAD > .extension-test/source.txt
+
+        sha256sum package-lock.json >> .extension-test/source.txt'
     - run: node tests/extensions-proof.mjs
+      if: steps.extension-cache.outputs.cache-hit != 'true'
+    - name: Reverify unchanged public proof fixtures against the current issuer
+      if: steps.extension-cache.outputs.cache-hit == 'true'
+      run: CBLC_EXTENSION_ISSUER="$PWD/target/debug/examples/extension_issuer" node
+        tests/replay-extensions.mjs
     - uses: actions/upload-artifact@v4
       if: always()
       with:
