@@ -1,8 +1,8 @@
 //! Real maintained proofs, signed authority and libSQL storage adversaries.
 
-mod common;
 #[path = "accounting_ledger/bounds.rs"]
 mod bounds;
+mod common;
 #[path = "accounting_ledger/integrity.rs"]
 mod integrity;
 #[path = "accounting_ledger/wire.rs"]

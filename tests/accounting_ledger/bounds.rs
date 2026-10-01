@@ -40,18 +40,30 @@ fn invalid_host_bounds_fail_before_state_creation() {
 fn common_checkpoint_bounds_and_idempotent_publication() {
     let f = Fixture::new();
     let mut ledger = memory(&f, policy()).unwrap();
-    assert_eq!(ledger.admit_checkpoint(0, [0; 32]), Err(Error::InvalidInput));
+    assert_eq!(
+        ledger.admit_checkpoint(0, [0; 32]),
+        Err(Error::InvalidInput)
+    );
     for slot in [u64::MAX, u64::MAX / 1000, czkp::MAX_INTEGER / 1000] {
-        assert_eq!(ledger.admit_checkpoint(slot, fr(1)), Err(Error::InvalidInput));
+        assert_eq!(
+            ledger.admit_checkpoint(slot, fr(1)),
+            Err(Error::InvalidInput)
+        );
     }
     ledger.admit_checkpoint(0, fr(1)).unwrap();
     ledger.admit_checkpoint(0, fr(1)).unwrap();
-    assert_eq!(ledger.admit_checkpoint(0, fr(2)), Err(Error::PolicyMismatch));
+    assert_eq!(
+        ledger.admit_checkpoint(0, fr(2)),
+        Err(Error::PolicyMismatch)
+    );
     let mut configured = policy();
     configured.checkpoint_period_seconds = czkp::MAX_INTEGER;
     let mut boundary = memory(&f, configured).unwrap();
     boundary.admit_checkpoint(0, fr(1)).unwrap();
-    assert_eq!(boundary.admit_checkpoint(1, fr(1)), Err(Error::InvalidInput));
+    assert_eq!(
+        boundary.admit_checkpoint(1, fr(1)),
+        Err(Error::InvalidInput)
+    );
 }
 
 #[test]
