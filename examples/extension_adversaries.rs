@@ -450,7 +450,7 @@ fn main() {
     rotation.old_signature = B64.encode(&old_root.sign(&bytes).to_bytes());
     rotation.new_signature = B64.encode(&new_root.sign(&bytes).to_bytes());
     ledger.rotate_root(&rotation).unwrap();
-    assert_eq!(
+    assert!(matches!(
         ledger.authenticated_obligations(
             &fixture.grant(7, &fixture.device),
             &fixture.authorize(7, &fixture.device),
@@ -458,7 +458,7 @@ fn main() {
             || now
         ),
         Err(Error::Admission)
-    );
+    ));
     // Rotate back through another genuine dual-signed update; never edit authority rows.
     std::mem::swap(&mut rotation.old_root, &mut rotation.new_root);
     rotation.expected_revision = 1;
