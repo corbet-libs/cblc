@@ -398,6 +398,29 @@ fn main() {
                                 .await
                                 .is_err()
                         );
+                        for member in ["invalid", "aa", "AA"] {
+                            assert!(verifier.verify_spent(&Change { member, ..change }, token).await.is_err());
+                        }
+                        assert!(verifier.verify_spent(&Change { community: "foreign", ..change }, token).await.is_err());
+                        assert!(verifier.verify_spent(&Change { replacement: change.expected.fingerprint, ..change }, token).await.is_err());
+                        for variant in 0..8 {
+                            let mut damaged = SpentChange {
+                                acceptance: token.acceptance.clone(),
+                                request: token.request.clone(),
+                                update: token.update.clone(),
+                            };
+                            match variant {
+                                0 => damaged.request.proof_scope.circuit_digest[0] ^= 1,
+                                1 => damaged.acceptance.statement.next_state[31] ^= 1,
+                                2 => damaged.acceptance.request_id[0] ^= 1,
+                                3 => damaged.acceptance.proof_scope.verifying_key_digest[0] ^= 1,
+                                4 => damaged.acceptance.request_digest[0] ^= 1,
+                                5 => damaged.acceptance.signature = "invalid".into(),
+                                6 => damaged.update.inbox.root[0] ^= 1,
+                                _ => damaged.update.effect = Effect::Update,
+                            }
+                            assert!(verifier.verify_spent(&change, &damaged).await.is_err());
+                        }
                         let store = MemoryStore::new("community.example").unwrap();
                         let pins = Pins::new(store, verifier);
                         pins.pin(change.member, change.field, change.expected.fingerprint)
