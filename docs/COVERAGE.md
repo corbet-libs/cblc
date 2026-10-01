@@ -21,3 +21,20 @@ Cargo.lock, with exactly one source per first-party crate. Dependabot maintains
 committed snapshots; CI refreshes once per run and retains the tested snapshot.
 Auto-merge requires protected main and successful substantive checks on the
 exact current Dependabot head. It never executes PR code with write permissions.
+
+Coverage includes the instrumented real issuer driven by the successful public
+extension proof trace. Only fictional statements/proofs and responses are
+retained, never private witnesses. Coverage re-verifies every proof and exact
+outcome on a fresh database without repeating expensive proof construction.
+The fixture under examples/ is a test harness and is excluded alongside tests/;
+all production src/ remains measured. This uses cargo-llvm-cov's documented
+[external-test instrumentation](https://github.com/taiki-e/cargo-llvm-cov#get-coverage-of-external-tests).
+
+Legacy ledger/service tests now consume five real maintained account proofs
+(genesis, reservation, second owner, competing reservation, tuned reservation).
+Every unique exact statement/proof pair passes the shipped worker before a
+test-process cache may reuse that result; mutations are independently checked.
+The counters measure verifier-boundary invocations, including cached real
+results. Controlled synchronization wraps real verification to exercise commit
+races. Process-failure fixtures can only refuse; no successful synthetic verdict
+is used. Extension proof traces remain a separate complete relation.

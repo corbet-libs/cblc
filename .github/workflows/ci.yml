@@ -76,7 +76,7 @@ jobs:
     - resolve
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
     steps:
@@ -104,14 +104,6 @@ jobs:
         node-version: 24
     - run: npm ci --ignore-scripts --no-audit --no-fund
     - run: npm test
-    - run: node runtime/extensions/compile.mjs
-    - uses: taiki-e/install-action@v2
-      with:
-        tool: wasm-pack
-    - run: wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir
-        "$PWD/.extension-wasm"
-    - run: cargo build --locked --example extension_issuer
-    - run: node tests/extensions-proof.mjs
     - uses: actions/cache@v4
       id: proof-cache
       with:
@@ -121,7 +113,15 @@ jobs:
           }}
     - if: steps.proof-cache.outputs.cache-hit != 'true'
       run: node tests/real-proof.mjs
-    - run: cargo test --locked
+    - run: cargo test --locked -- --test-threads=2
+    - run: node runtime/extensions/compile.mjs
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: wasm-pack
+    - run: wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir
+        "$PWD/.extension-wasm"
+    - run: cargo build --locked --example extension_issuer
+    - run: node tests/extensions-proof.mjs
     - uses: actions/upload-artifact@v4
       if: always()
       with:
@@ -147,6 +147,13 @@ jobs:
       with:
         name: formatting
         path: formatting.patch
+    - uses: actions/upload-artifact@v4
+      with:
+        name: extension-public-proofs
+        path: .extension-test/
+        include-hidden-files: true
+        if-no-files-found: error
+        retention-days: 7
     needs:
     - resolve
   coverage:
@@ -167,6 +174,10 @@ jobs:
       with:
         name: proof-fixtures
         path: .proof-test
+    - uses: actions/download-artifact@v4
+      with:
+        name: extension-public-proofs
+        path: .extension-test
     - uses: actions/setup-node@v4
       with:
         node-version: 24
@@ -184,9 +195,19 @@ jobs:
 
         cargo llvm-cov --version'
     - name: Measure real native round trips and failure paths
-      run: cargo llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage
-        --no-cfg-coverage-nightly --ignore-filename-regex '/tests/' --json --output-path
-        coverage.json
+      run: 'source <(cargo llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
+
+        cargo llvm-cov clean --workspace
+
+        cargo test --locked --workspace --all-features -- --test-threads=2
+
+        cargo build --locked --example extension_issuer
+
+        CBLC_EXTENSION_ISSUER="$CARGO_TARGET_DIR/debug/examples/extension_issuer"
+        node tests/replay-extensions.mjs
+
+        cargo llvm-cov report --branch --ignore-filename-regex ''/tests/|/examples/''
+        --json --output-path coverage.json'
     - name: Require complete line and branch coverage
       run: python3 .github/check-coverage.py coverage.json
     - uses: actions/upload-artifact@v4
@@ -201,7 +222,7 @@ jobs:
         retention-days: 7
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
-'on':
+true:
   push:
     branches:
     - main

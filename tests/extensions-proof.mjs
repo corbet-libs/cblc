@@ -44,7 +44,7 @@ const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-
   circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files,issuerKey:toArray(issuer.getPublicKey().subarray(1))};
 const manifestBytes=Buffer.from(JSON.stringify(manifest));await writeFile(resolve(directory,'manifest.json'),manifestBytes);
 const configPath=resolve(directory,'config.json');await writeFile(configPath,JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
-const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[];
+const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
 const hashApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const hashes=extensionHashes(hashApi);
 const child=spawn(resolve('target/debug/examples/extension_issuer'),[configPath],{stdio:['pipe','pipe','inherit']});
@@ -52,7 +52,8 @@ let pending;const lines=createInterface({input:child.stdout});
 lines.on('line',line=>{const waiter=pending;pending=undefined;if(!waiter)throw new Error('Unexpected issuer reply');waiter.resolve(JSON.parse(line));});
 child.on('exit',code=>{if(pending)pending.reject(new Error(`Issuer exited ${code}`));});
 async function call(request,expected=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
-  assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);publicCases.push({operation:request.op,ok:result.ok,error:result.error});return result.value;}
+  assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);publicCases.push({operation:request.op,ok:result.ok,error:result.error});
+  publicTrace.push({request:structuredClone(request),response:result});return result.value;}
 let activeProver;
 async function proof(kind,input,label,measure=false){
   const selected=artifacts.artifacts(kind),witness=witnessInputs(selected.circuit,input),expected=publicInputs(selected.circuit,input);
@@ -244,4 +245,7 @@ try{
   await assert.rejects(members[2].expire(reordered.outgoing,now));
   console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
   await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
+  // Only fictional public requests/proofs cross this fixture pipe. Replaying
+  // them measures issuer coverage without generating another set of proofs.
+  await writeFile(resolve(directory,'public-trace.json'),JSON.stringify(publicTrace));
 }finally{child.stdin.end();await activeProver?.prover.destroy();await hashApi.destroy();}

@@ -251,6 +251,18 @@ fn main() {
                                 .is_err()
                         );
                     }
+                    for (before, after) in [(now, now + 1), (now, now - 1), (0, now)] {
+                        let tick = std::cell::Cell::new(before);
+                        assert!(
+                            ledger
+                                .as_mut()
+                                .unwrap()
+                                .authenticated_obligations(&grant, &authority, &request, || {
+                                    tick.replace(after)
+                                })
+                                .is_err()
+                        );
+                    }
                     let mut service =
                         AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?;
                     let operation = AccountServiceRequest::Obligations {
@@ -283,6 +295,44 @@ fn main() {
                     tampered.inbox.root[0] ^= 1;
                     assert!(
                         cblc::obligations::verify_response(&request, &tampered, &key, now).is_err()
+                    );
+                    for field in 0..3 {
+                        let mut invalid = response.clone();
+                        match field {
+                            0 => invalid.observed_at = request.issued_at - 1,
+                            1 => invalid.observed_at = now + 1,
+                            _ => {
+                                invalid.entries = vec![
+                                    cblc::extensions::PendingObligation {
+                                        previous: Default::default(),
+                                        commitment: [1; 32],
+                                    };
+                                    65
+                                ];
+                            }
+                        }
+                        assert!(
+                            cblc::obligations::verify_response(&request, &invalid, &key, now)
+                                .is_err()
+                        );
+                    }
+                    for field in 0..4 {
+                        let mut invalid = request.clone();
+                        match field {
+                            0 => invalid.request_id = Some([1; 32]),
+                            1 => invalid.chat_public_key = "invalid".into(),
+                            2 => invalid.signature = "invalid".into(),
+                            _ => invalid.challenge = [0; 32],
+                        }
+                        assert!(
+                            cblc::obligations::verify_response(&invalid, &response, &key, now)
+                                .is_err()
+                        );
+                    }
+                    let foreign_key = SigningKey::from_bytes(&[10; 32]).verifying_key().to_bytes();
+                    assert!(
+                        cblc::obligations::verify_response(&request, &response, &foreign_key, now)
+                            .is_err()
                     );
                     Ok(json!({"root":response.inbox,"entries":response.entries}))
                 }
