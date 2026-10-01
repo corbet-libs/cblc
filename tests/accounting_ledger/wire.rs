@@ -7,7 +7,9 @@ fn issued_acceptance_and_status_refuse_cross_scope_and_malformed_envelopes() {
     let dir = tempfile::tempdir().unwrap();
     let mut ledger = open(&dir.path().join("wire.db"), &f, RealVerifier::default());
     let original = genesis(&f);
-    ledger.admit_checkpoint(0, original.statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, original.statement.enrollment_root)
+        .unwrap();
     let grant = f.grant(7, &f.device);
     let authority = f.authorize(7, &f.device);
     let accepted = ledger.apply(&grant, &authority, &original, || 120).unwrap();
@@ -34,7 +36,11 @@ fn issued_acceptance_and_status_refuse_cross_scope_and_malformed_envelopes() {
         expires_at: 180,
         signature: String::new(),
     };
-    request.signature = B64.encode(&f.device.sign(&account_status_bytes(&request).unwrap()).to_bytes());
+    request.signature = B64.encode(
+        &f.device
+            .sign(&account_status_bytes(&request).unwrap())
+            .to_bytes(),
+    );
     let response = ledger.status(&grant, &authority, &request, || 140).unwrap();
     verify_account_status_response(&response, &request, &operator).unwrap();
     for variant in 0..9 {
@@ -72,7 +78,11 @@ fn issued_acceptance_and_status_refuse_cross_scope_and_malformed_envelopes() {
     // invents acceptance or a private opening.
     request.request_id = Some([44; 32]);
     request.challenge = [34; 32];
-    request.signature = B64.encode(&f.device.sign(&account_status_bytes(&request).unwrap()).to_bytes());
+    request.signature = B64.encode(
+        &f.device
+            .sign(&account_status_bytes(&request).unwrap())
+            .to_bytes(),
+    );
     let absent = ledger.status(&grant, &authority, &request, || 150).unwrap();
     assert!(absent.acceptance.is_none());
     verify_account_status_response(&absent, &request, &operator).unwrap();

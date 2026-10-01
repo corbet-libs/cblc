@@ -399,10 +399,37 @@ fn main() {
                                 .is_err()
                         );
                         for member in ["invalid", "aa", "AA"] {
-                            assert!(verifier.verify_spent(&Change { member, ..change }, token).await.is_err());
+                            assert!(
+                                verifier
+                                    .verify_spent(&Change { member, ..change }, token)
+                                    .await
+                                    .is_err()
+                            );
                         }
-                        assert!(verifier.verify_spent(&Change { community: "foreign", ..change }, token).await.is_err());
-                        assert!(verifier.verify_spent(&Change { replacement: change.expected.fingerprint, ..change }, token).await.is_err());
+                        assert!(
+                            verifier
+                                .verify_spent(
+                                    &Change {
+                                        community: "foreign",
+                                        ..change
+                                    },
+                                    token
+                                )
+                                .await
+                                .is_err()
+                        );
+                        assert!(
+                            verifier
+                                .verify_spent(
+                                    &Change {
+                                        replacement: change.expected.fingerprint,
+                                        ..change
+                                    },
+                                    token
+                                )
+                                .await
+                                .is_err()
+                        );
                         for variant in 0..8 {
                             let mut damaged = SpentChange {
                                 acceptance: token.acceptance.clone(),

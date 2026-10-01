@@ -1,7 +1,10 @@
 //! Service boundary tests use actual maintained holder proofs and the shipped verifier.
 mod common;
 use cblc::{Error, accounting::*, accounting_ledger::*, accounting_service::*};
-use common::{Fixture, proofs::{self, RealVerifier}};
+use common::{
+    Fixture,
+    proofs::{self, RealVerifier},
+};
 use ed25519_dalek::SigningKey;
 use std::{
     path::Path,
@@ -58,7 +61,9 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
         100_000,
     )
     .unwrap();
-    service.publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     for body in [
         serde_json::json!({"action":"tuneWaitingPeriod","seconds":1000}),
         serde_json::json!({"action":"publishCheckpoint","root":proofs::record(0).statement.enrollment_root}),
@@ -93,7 +98,9 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
         100_000,
     )
     .unwrap();
-    service.publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let request = AccountServiceRequest::Apply {
         grant: f.grant(7, &f.device),
         authorization: f.authorize(7, &f.device),
@@ -130,7 +137,9 @@ fn invalid_authority_cannot_register_an_account() {
         100_000,
     )
     .unwrap();
-    service.publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let bad = AccountServiceRequest::Apply {
         grant: f.grant(8, &f.device),
         authorization: f.authorize(8, &f.device),
@@ -189,7 +198,9 @@ fn actual_js_client_request_is_accepted_by_rust_and_js_checks_the_signed_rust_re
         100_000,
     )
     .unwrap();
-    service.publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let response: serde_json::Value =
         serde_json::from_slice(&service.handle_json(&body).unwrap()).unwrap();
     let envelope: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -246,8 +257,8 @@ fn verifier_kills_and_reaps_timeout_then_releases_capacity_and_rejects_large_std
         Err(Error::CryptoProvider)
     );
     // A well-formed refusal tests framing after cleanup; this worker never accepts a proof.
-    let verdict =
-        serde_json::json!({"verified":false,"proofScope":proofs::record(0).proof_scope}).to_string();
+    let verdict = serde_json::json!({"verified":false,"proofScope":proofs::record(0).proof_scope})
+        .to_string();
     fs::write(
         &script,
         format!(
@@ -256,7 +267,10 @@ fn verifier_kills_and_reaps_timeout_then_releases_capacity_and_rejects_large_std
         ),
     )
     .unwrap();
-    assert_eq!(verifier.verify(&statement, &[1, 2, 3]), Err(Error::CryptoProvider));
+    assert_eq!(
+        verifier.verify(&statement, &[1, 2, 3]),
+        Err(Error::CryptoProvider)
+    );
     assert_eq!(
         verifier.verify(&statement, &vec![0; 1024 * 1024 + 1]),
         Err(Error::InvalidInput)

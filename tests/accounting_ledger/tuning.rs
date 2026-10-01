@@ -14,7 +14,9 @@ fn with_policy(
     if !request.statement.genesis && account.abandon_after == 1500 {
         let actual = proofs::record(4);
         request.statement = actual.statement;
-        request.proof = data_encoding::HEXLOWER.decode(actual.proof.as_bytes()).unwrap();
+        request.proof = data_encoding::HEXLOWER
+            .decode(actual.proof.as_bytes())
+            .unwrap();
     }
     request.statement.policy = account.clone();
     request.statement.policy_digest = account.digest(&request.statement.community).unwrap();
@@ -29,7 +31,9 @@ fn invalid_tuning_revision_clock_and_storage_failure_are_atomic() {
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
     let mut ledger = open(&path, &f, RealVerifier::default());
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     ledger
         .apply(
             &f.grant(7, &f.device),
@@ -107,7 +111,9 @@ fn restart_loads_durable_wait_and_preserves_genesis_and_exact_old_retry() {
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
     let mut ledger = open(&path, &f, RealVerifier::default());
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let accepted = ledger.apply(&g, &a, &first, || 120).unwrap();
     let tuning = ledger.update_waiting_period(0, 1500, || 130).unwrap();
     drop(ledger);
@@ -190,7 +196,9 @@ fn stale_handles_and_old_proofs_reject_before_verify_then_reload_accepts_success
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
     let mut writer = open(&path, &f, RealVerifier::default());
-    writer.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    writer
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     writer.apply(&g, &a, &first, || 120).unwrap();
     let verifier = RealVerifier::default();
     let calls = verifier.calls.clone();
@@ -240,7 +248,9 @@ fn tuning_during_blocked_verification_rejects_the_stale_transition_atomically() 
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
         let mut writer = open(&path, &f, RealVerifier::default());
-        writer.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+        writer
+            .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
         writer.apply(&g, &a, &first, || 120).unwrap();
         let request = successor(&first, &f, 11);
         let (verifier, entered, release) = blocked_verifier();

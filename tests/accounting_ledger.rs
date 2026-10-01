@@ -4,7 +4,10 @@ mod common;
 #[path = "accounting_ledger/wire.rs"]
 mod wire;
 use cblc::{Error, accounting::*, accounting_ledger::*};
-use common::{Fixture, proofs::{self, RealVerifier}};
+use common::{
+    Fixture,
+    proofs::{self, RealVerifier},
+};
 use data_encoding::BASE64URL_NOPAD as B64;
 use ed25519_dalek::{Signer, SigningKey};
 #[path = "support/inspect.rs"]
@@ -126,12 +129,10 @@ fn rejected_proof_cannot_register_and_genesis_is_lifetime_unique_after_restart()
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
-    let mut ledger = open(
-        &path,
-        &f,
-        RealVerifier::default(),
-    );
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let mut corrupt = request.clone();
     corrupt.proof[0] ^= 1;
     sign(&mut corrupt, &f.device);
@@ -163,7 +164,9 @@ fn exact_retry_does_not_verify_or_debit_again_and_changed_bytes_are_rejected() {
     let v = RealVerifier::default();
     let calls = v.calls.clone();
     let mut ledger = open(&dir.path().join("ledger.sqlite"), &f, v);
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
@@ -191,7 +194,9 @@ fn real_authority_and_common_checkpoint_are_required_before_verifying() {
         ledger.apply(&g, &a, &request, || 120),
         Err(Error::Admission)
     );
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     assert_eq!(
         ledger.admit_checkpoint(0, fr(9)),
         Err(Error::PolicyMismatch)
@@ -223,7 +228,9 @@ fn expiry_and_clock_changes_during_verification_have_no_effect() {
         &f,
         RealVerifier::default(),
     );
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
@@ -254,7 +261,8 @@ fn blocked_proof_allows_another_owner_to_commit_and_rechecks_shared_clock_floor(
         let f = Fixture::new();
         let (verifier, entered, release) = blocked_verifier();
         let mut slow = open(&path, &f, verifier);
-        slow.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+        slow.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
@@ -267,7 +275,8 @@ fn blocked_proof_allows_another_owner_to_commit_and_rechecks_shared_clock_floor(
             // Open/configuration and checkpoint publication must also remain
             // possible while the first verifier is deliberately blocked.
             let mut fast = open(&path, &f, RealVerifier::default());
-            fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+            fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+                .unwrap();
             let accepted = fast.apply(&other_grant, &other_authorization, &other, || other_time);
             release.send(()).unwrap();
             let resumed = worker.join().unwrap();
@@ -298,7 +307,8 @@ fn successor_losing_during_verification_cannot_commit_its_marker_or_response() {
         let path = dir.path().join("ledger.sqlite");
         let f = Fixture::new();
         let mut fast = open(&path, &f, RealVerifier::default());
-        fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+        fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
@@ -346,7 +356,8 @@ fn concurrently_cached_request_bypasses_original_expiry_but_requires_live_author
         let path = dir.path().join("ledger.sqlite");
         let f = Fixture::new();
         let mut fast = open(&path, &f, RealVerifier::default());
-        fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+        fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
@@ -401,7 +412,9 @@ fn checkpoint_slot_expiry_during_verification_cannot_commit() {
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap();
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let times = [120, 120, 150];
     let index = Cell::new(0);
     let result = ledger.apply(
@@ -437,7 +450,9 @@ fn root_authorized_devices_share_one_compare_and_swap_frontier() {
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
     let mut ledger = open(&path, &f, RealVerifier::default());
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
@@ -477,7 +492,9 @@ fn failure_after_marker_insertion_rolls_back_marker_state_response_and_clock() {
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
     let mut ledger = open(&path, &f, RealVerifier::default());
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
@@ -525,7 +542,9 @@ fn recovered_device_status_is_challenge_bound_and_returns_no_new_genesis() {
         &f,
         RealVerifier::default(),
     );
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let first = genesis(&f);
     let accepted = ledger
         .apply(
@@ -646,7 +665,9 @@ fn independent_processes_race_and_reopen_returns_the_committed_winner() {
     let gate = dir.path().join("go");
     let f = Fixture::new();
     let mut ledger = open(&path, &f, RealVerifier::default());
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     ledger
         .apply(
             &f.grant(7, &f.device),
@@ -721,7 +742,9 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
     let path = dir.path().join("continuity.sqlite");
     let f = Fixture::new();
     let mut ledger = open(&path, &f, RealVerifier::default());
-    ledger.admit_checkpoint(0, proofs::record(0).statement.enrollment_root).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let old = f.authorize(7, &f.device);
     let first = genesis(&f);
