@@ -84,3 +84,10 @@ comparison need not repeat after verification; the persisted configuration is
 still rechecked inside the final write transaction, preserving concurrent tuning
 refusal. A genuinely signed changed policy is rejected before real verification,
 while the original real proof succeeds. No coverage exclusion is used.
+
+External replay uses the executable path from Cargo's original
+[compiler-artifact message](https://doc.rust-lang.org/cargo/reference/external-tools.html#artifact-messages),
+not an assumed target-directory environment variable. Every report step imports
+the same external-instrumentation environment. Reports are retained even when a
+real execution fails; its failure still blocks the workflow and cannot be replaced
+by the resulting partial coverage. The compiler-artifact stream is retained too.

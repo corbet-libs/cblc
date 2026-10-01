@@ -231,24 +231,31 @@ jobs:
 
         cargo llvm-cov --version'
     - name: Measure real native round trips and failure paths
-      run: 'source <(cargo llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
-
+      run: |
+        set -euo pipefail
+        source <(cargo llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
         cargo llvm-cov clean --workspace
-
         cargo test --locked --workspace --all-features -- --test-threads=2
-
-        cargo build --locked --example extension_issuer
-
-        CBLC_EXTENSION_ISSUER="$CARGO_TARGET_DIR/debug/examples/extension_issuer"
+        cargo build --locked --example extension_issuer --message-format=json > instrumented-build.json
+        CBLC_EXTENSION_ISSUER="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "extension_issuer" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one issuer executable") end' instrumented-build.json)"
+        export CBLC_EXTENSION_ISSUER
+        test -x "$CBLC_EXTENSION_ISSUER"
         node tests/replay-extensions.mjs
-
-        cargo llvm-cov report --branch --ignore-filename-regex ''/tests/|/examples/''
-        --json --output-path coverage.json'
+    - name: Retain raw coverage even when a real execution fails
+      if: always()
+      run: |
+        source <(cargo llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
+        cargo llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --json --output-path coverage.json
     - name: Retain source coverage diagnostics from the same execution
-      run: cargo llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/'
-        --lcov --output-path coverage.lcov
+      if: always()
+      run: |
+        source <(cargo llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
+        cargo llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --lcov --output-path coverage.lcov
     - name: Retain independent annotated source inventory
-      run: cargo llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --text --output-path coverage.txt
+      if: always()
+      run: |
+        source <(cargo llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
+        cargo llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --text --output-path coverage.txt
     - name: Require complete source line and branch coverage
       run: |
         python3 .github/test-source-coverage.py
@@ -265,7 +272,9 @@ jobs:
 
           coverage.lcov
 
-          coverage.txt'
+          coverage.txt
+
+          instrumented-build.json'
         retention-days: 7
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
