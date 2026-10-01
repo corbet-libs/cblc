@@ -148,7 +148,11 @@ fn main() {
                         request: Box::new(request.clone()),
                         update: update.clone(),
                     };
-                    assert!(service.handle_for_member(&[member ^ 1; 48], operation.clone()).is_err());
+                    assert!(
+                        service
+                            .handle_for_member(&[member ^ 1; 48], operation.clone())
+                            .is_err()
+                    );
                     let response = service.handle_for_member(&[member; 48], operation);
                     ledger = Some(service.into_ledger());
                     let AccountServiceResponse::ApplyExtended {
@@ -254,7 +258,11 @@ fn main() {
                         authorization: authority,
                         request: request.clone(),
                     };
-                    assert!(service.handle_for_member(&[member ^ 1; 48], operation.clone()).is_err());
+                    assert!(
+                        service
+                            .handle_for_member(&[member ^ 1; 48], operation.clone())
+                            .is_err()
+                    );
                     let response = service.handle_for_member(&[member; 48], operation);
                     ledger = Some(service.into_ledger());
                     let AccountServiceResponse::Obligations(response) = response? else {
