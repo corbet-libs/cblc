@@ -105,11 +105,9 @@ fn cached(
 // Check mutable database predicates both before expensive verification and in
 // the final write transaction. Policy and request bytes remain immutably
 // borrowed across verification; no preflight database result authorizes commit.
-#[allow(clippy::too_many_arguments)]
 fn check_pending(
     transaction: &mut Transaction<'_>,
     request: &AccountRequest,
-    root_key: &[u8; 32],
     grant: &AdmissionGrant,
     authorization: &DeviceAuthorization,
     policy: &AccountLedgerPolicy,
@@ -130,7 +128,6 @@ fn check_pending(
         || now >= request.expires_at
         || request.expires_at > grant.expires_at
         || request.expires_at > authorization.expires_at
-        || request.expires_at > policy.account.policy_valid_until
     {
         return Err(Error::Expired);
     }
@@ -147,7 +144,6 @@ fn check_pending(
         None if statement.genesis => {}
         Some(prior)
             if !statement.genesis
-                && prior.root_key == *root_key
                 && prior.version == statement.previous_version
                 && prior.state == statement.previous_state => {}
         _ => return Err(Error::Replay),
@@ -367,7 +363,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         check_pending(
             &mut transaction,
             request,
-            &root_key,
             grant,
             authorization,
             &self.policy,
@@ -426,7 +421,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         check_pending(
             &mut transaction,
             request,
-            &root_key,
             grant,
             authorization,
             &self.policy,

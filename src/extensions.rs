@@ -199,7 +199,7 @@ pub fn extended_request_digest(
         config,
         update,
     ))
-    .map_err(|_| Error::InvalidInput)?;
+    .or(Err(Error::InvalidInput))?;
     Ok(Sha256::digest(binding).into())
 }
 /// Verify a returned acceptance for the exact effect before consuming permission
