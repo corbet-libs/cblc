@@ -209,6 +209,29 @@ fn main() {
         );
     }
     let certificate = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
+    let next = &trace
+        .iter()
+        .find(|value| {
+            value["request"]["op"] == "apply"
+                && value["request"]["statement"]["genesis"] == false
+                && value["response"]["ok"] == true
+        })
+        .unwrap()["request"];
+    let member = next["member"].as_u64().unwrap() as u8;
+    let candidate = request(next, &scope, &fixture, 77);
+    assert_eq!(candidate.statement.settlement_marker, [0; 32]);
+    let mut altered: ExtendedUpdate = serde_json::from_value(next["update"].clone()).unwrap();
+    altered.effect = Effect::Change { binding: [1; 32] };
+    assert_eq!(
+        ledger.apply_extended(
+            &fixture.grant(member, &fixture.device),
+            &fixture.authorize(member, &fixture.device),
+            &candidate,
+            &altered,
+            || candidate.issued_at
+        ),
+        Err(Error::InvalidInput)
+    );
     for variant in 0..2 {
         let mut damaged = accepted[0].clone();
         if variant == 0 {
