@@ -79,6 +79,7 @@ jobs:
     timeout-minutes: 60
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
+      CBLC_LEDGER_FIXTURES: '1'
     steps:
     - uses: actions/checkout@v4
       with:
@@ -208,6 +209,9 @@ jobs:
 
         cargo llvm-cov report --branch --ignore-filename-regex ''/tests/|/examples/''
         --json --output-path coverage.json'
+    - name: Retain source coverage diagnostics from the same execution
+      run: cargo llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/'
+        --lcov --output-path coverage.lcov
     - name: Require complete line and branch coverage
       run: python3 .github/check-coverage.py coverage.json
     - uses: actions/upload-artifact@v4
@@ -218,7 +222,9 @@ jobs:
 
           Cargo.lock
 
-          resolver.txt'
+          resolver.txt
+
+          coverage.lcov'
         retention-days: 7
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
